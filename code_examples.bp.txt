@@ -24,7 +24,32 @@
 @=7='d'.//set ptr to c7, set c7 to d, and print
 @+='!'.	//inc ptr, set c8 to !, and print
 
-x | 0  1   2   3   4   5  6  7   8   9   10  11
-y | 72 101 108 108 111 32 87 111 114 108 100 33
-    H  e   l   l   o      W  o   r   l   d   !
--1, 17, -160, 1004, -4157, 11078, -17990, 15839, -5602, 72
+/*find the sum of an array*/
+#define size  2
+#define start 3
+#define cntr  4
+
+//size = size of array
+//start = first position in array
+//uses cells 0-1
+//ptr ends at sum
+//returns sum in position after array
+sum {
+  @=0 =@size+
+  @=@start@+@size@+1 =0
+  for (@=0 =0; <@size; +) {
+    @=1 =@start+@0
+    @=@start@+@size@+1
+    +@@1
+    @=0
+  }
+  @=@start@+@size@+1
+}
+
+@=size =8
+@=start =start+2
+for (@=cntr =1; <=@size; +) { 
+  @+@cntr =@cntr
+  @=cntr
+}
+sum
