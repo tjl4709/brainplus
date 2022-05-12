@@ -1,6 +1,6 @@
  Symbol  | Meaning                                | Step to implement
 ---------|----------------------------------------|------------------
-   ~ n   | write current addr to cell n           | 1
+   ~ n   | write ptr addr to cell n (default 0)   | 1
   @~ n   | get val at relative addr n (default 0) | 1
    @ n   | get value at addr n (default current)  | 1
   @S n   | perform S on ptr                       | 1
