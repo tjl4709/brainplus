@@ -1,7 +1,8 @@
- Symbol  | Meaning                                | Step to implement
+  Symbol | Meaning                                | Step to implement
 ---------|----------------------------------------|------------------
-   ~ n   | write ptr addr to cell n (default 0)   | 1
-  @~ n   | get val at relative addr n (default 0) | 1
+   # n   | write ptr addr to cell n (default 0)   | 1
+  @# n   | get val at + relative addr n (def 0)   | 1
+  @## n  | get val at - rel addr n (default 0)    | 1
    @ n   | get value at addr n (default current)  | 1
   @S n   | perform S on ptr                       | 1
    + n   | inc val by n (default 1)               | 1
