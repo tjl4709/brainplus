@@ -27,6 +27,7 @@ v1 != v2 | returns whether v1 is not equal to v2  | 1
 
 Keyword | Syntax                             | Step to implement
 --------|------------------------------------|------------------
+#include| #include file                      | 1
 #define | #define name sub                   | 1
    if   | if(cond){}                         | 2
   else  | if(cond){}else{}                   | 2
@@ -34,6 +35,7 @@ Keyword | Syntax                             | Step to implement
  while  | while(cond){} -or- do{}while(cond) | 2
    do   | do{}while(cond)                    | 2
    ?:   | cond?val1:val2                     | 2
+*where file is another .bp file which will also get parsed excluding top-level statements
 *where name is a string literal to be replaced with sub in code body
 *where 'cond' is a boolean condition which evaluates to false if zero, true otherwise
 
@@ -48,8 +50,12 @@ Also to add:
 *functions
 
 high-level pseudocode:
-0. use text-replacement for defines
-1. use lexer to turn string of characters into string of tokens
-2. use AST to parse tokens into useful structures (methods then statements)
-3. codegen in the following order (method headers, method bodies, statements)
-4. what's next?
+0. open include files
+1. use text-replacement for defines
+  1.1. gather all defines from all files (ensure no duplicates and no recursion)
+  1.2. replace defines with defines
+  1.3. replace defines in open files
+2. use lexer to turn string of characters into string of tokens
+3. use AST to parse tokens into useful structures (methods then statements)
+4. codegen in the following order (method headers, method bodies, statements)
+5. what's next?
