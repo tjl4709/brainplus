@@ -11,6 +11,9 @@
 
 struct Location {
     int Line, Col;
+    std::string toString() const {
+        return "l:" + std::to_string(Line) + " c:" + std::to_string(Col);
+    }
 };
 
 enum TokenType {
@@ -89,7 +92,15 @@ public:
                 n = n*10 + c;
             } while (isdigit(c = advance()));
             return *(curTok = new NumberToken(n, curLoc));
-        } 
+        } else if (c == '/') {
+            c = advance();
+            if (c == '/') {
+                while ((c = advance()) != '\n');
+                return getNextToken();
+            } else if (c == '*') {
+
+            } else throw std::exception(("Unexpected '/' at " + curLoc.toString()).c_str());
+        }
 
         return *curTok;
     }
