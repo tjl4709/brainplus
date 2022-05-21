@@ -1,0 +1,12 @@
+/*hello world (single cell version)*/
+='H'.	//set current cell to 'H' and print
++29.	//set current cell to 'e' and print
++7..	//set cell to 'l' and print twice
++0x3.	//set cell to 'o' and print
+=' '.	//set cell to space and print
+='W'.	//set cell to uppercase W and print
+='o'.	//set cell to lowercase o and print
++3.	//set cell and print lowercase r
+-0x6.	//set cell and print lowercase l
+-8.	//print lowercase d
+='!'.	//print exclamation mark

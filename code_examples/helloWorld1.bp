@@ -1,0 +1,12 @@
+/*hello world (single char per cell version)*/
+='H'.	//set cell 0 to H and print
+@+='e'.	//increment ptr, set cell 1 to e, and print
+@+='l'..//increment ptr, set cell 2 to l, and print twice
+@+='o'.	//increment ptr, set cell 3 to o, and print
+@+=' '.	//inc ptr, set cell 4 to space, and print
+@+='W'.	//inc ptr, set cell 5 to W, and print
+@-@-.	//dec ptr twice and print (o)
+@+3='r'.//inc ptr by 3, set cell 6 to r, and print
+@=2.	//set ptr to cell 2 and print (l)
+@=7='d'.//set ptr to c7, set c7 to d, and print
+@+='!'.	//inc ptr, set c8 to !, and print

@@ -37,27 +37,44 @@ public:
     TokenType Type;
     Location Loc;
     Token(TokenType t, Location l) : Type(t), Loc(l) {}
+    virtual std::string toString() {
+        switch (Type) {
+            case t_eof: return "EOF";
+            case t_include: return "include";
+            case t_define: return "define";
+            case t_if: return "if";
+            case t_else: return "else";
+            case t_for: return "for";
+            case t_while: return "while";
+            case t_do: return "do";
+            case t_number: return "NUMBER";
+            case t_identifier: return "IDENTIFIER";
+            default: return {0, (char)Type};
+        }
+    }
 };
 class IdentifierToken : public Token {
 public:
     std::string Identifier;
     IdentifierToken(std::string id, Location l) : Token(TokenType::t_identifier, l), Identifier(std::move(id)) {}
+    std::string toString() override { return "ID:" + Identifier; }
 };
 class NumberToken : public Token {
 public:
     int Number;
     NumberToken(int n, Location l) : Token(TokenType::t_number, l), Number(n) {}
+    std::string toString() override { return "N:" + std::to_string(Number); }
 };
 
 class Lexer {
 private:
     Location lexLoc;
     Token *curTok;
-    std::ifstream file;
+    std::ifstream *file;
     int advance() {
-        int c = file.get();
+        int c = file->get();
         if (c == '\r')
-            c = file.get();
+            c = file->get();
         if (c == '\n') {
             lexLoc.Line++;
             lexLoc.Col = 0;
@@ -66,6 +83,10 @@ private:
         return c;
     }
 public:
+    explicit Lexer(const std::string& filename) : lexLoc({0,0}), curTok(nullptr) {
+        file = new std::ifstream(filename);
+    }
+    bool good() {return file->good();}
     Token getCurrentToken() {return *curTok;}
     Token getNextToken() {
         int c;
@@ -74,9 +95,9 @@ public:
         TokenType tt;
 
         if (isalpha(c)) {
-            std::string str = std::to_string(c);
+            std::string str(1,c);
             while(isalnum(c = advance()))
-                str += std::to_string(c);
+                str += (char)c;
 
             if (str == "include") tt = TokenType::t_include;
             else if (str == "define") tt = TokenType::t_define;
@@ -98,13 +119,21 @@ public:
                 while ((c = advance()) != '\n');
                 return getNextToken();
             } else if (c == '*') {
+                c = advance();
+                do {
+                    while (c != '*' && c != EOF)
+                        c = advance();
+                    if (c == EOF)
+                        throw std::exception(("SyntaxException: Multiline comment not closed at "+curLoc.toString()).c_str());
+                    c = advance();
+                } while (c != '/');
+                return getNextToken();
+            } else throw std::exception(("SyntaxException: Unexpected '/' at " + curLoc.toString()).c_str());
+        } else if (c == EOF) tt = TokenType::t_eof;
+        else tt = (TokenType)c;
 
-            } else throw std::exception(("Unexpected '/' at " + curLoc.toString()).c_str());
-        }
-
-        return *curTok;
+        return *(curTok = new Token(tt, curLoc));
     }
 };
-
 
 #endif //BRAINPLUS_LEXER_H
