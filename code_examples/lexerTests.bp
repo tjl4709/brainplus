@@ -1,0 +1,9 @@
+'\''	//test punctuation char const
+'0'	//test digit char const
+'a'	//test lowercase char const
+'B'	//test uppercase char const
+'\n'	//test special char const
+''	//*empty char const
+'ab'	//*multi-char const
+/	//*improper comment
+/*	//*un-closed multi-line comment
