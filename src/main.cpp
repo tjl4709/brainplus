@@ -1,35 +1,27 @@
 #include <iostream>
+#include <vector>
+#include <map>
 #include "Lexer.h"
+#include "Parser.h"
+#include "ASTNodes.h"
 
-Lexer *lexer;
-
-void openFile() {
-    std::string file;
-    std::cout << "Enter filename:";
-    std::cin >> file;
-    lexer = new Lexer(file);
-}
+std::string mainFile;
+std::map<IncludeNode*,Parser*> includes;
+std::vector<DefineNode*> defines;
+std::vector<FunctionNode*> functions;
 
 int main() {
-    bool errored;
-    openFile();
-    while (lexer->good()) {
-        errored = false;
-        do {
-            try {
-                while (lexer->getNextToken().Type != TokenType::t_eof) {
-                    if (errored) {
-                        errored = false;
-                        std::cout << '\n';
-                    }
-                    std::cout << lexer->getCurrentToken().toString() + " ";
-                }
-            } catch (std::exception &e) {
-                std::cout << '\n' << e.what();
-                errored = true;
-            }
-        } while (lexer->getCurrentToken().Type != TokenType::t_eof);
-        std::cout << "\n\n";
-        openFile();
-    }
+    // get mainFile and add to includes
+    // loop thru includes:
+    //   parse include statements. if not in inlcudes and lexer is good, then add to includes
+    // loop thru includes:
+    //   parse define statements. if define name in defines, throw error, otherwise add to defines
+    // loop thru define statements:
+    //   if contains reference to itself, throw error, otherwise replace any occurrence in other define statements
+    // loop thru includes:
+    //   insert defines into parser
+    //   parse function definitions. if function name in functions or defines, throw error, otherwise add to functions
+    // parse code statements in mainFile
+    // codegen functions
+    // codegen mainFile code statements
 }

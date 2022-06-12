@@ -48,14 +48,17 @@ class Lexer {
 private:
     Location lexLoc;
     Token *curTok;
+    std::string fname;
     std::ifstream *file;
     int curChar;
     int advance();
 public:
     explicit Lexer(const std::string& filename) : lexLoc({1,0}), curTok(nullptr), curChar(' ') {
+        fname = filename;
         file = new std::ifstream(filename);
     }
     bool good() {return file->good();}
+    std::string getFileName() {return fname;}
     Token getCurrentToken() {return *curTok;}
     Token getNextToken();
 };
