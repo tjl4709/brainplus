@@ -41,7 +41,8 @@ public:
     Token(TokenType t, Location l);
     Token(int n, Location l);
     Token(std::string id, Location l);
-    virtual std::string toString();
+    void copy(const Token& tok);
+    std::string toString() const;
 };
 
 class Lexer {
@@ -56,11 +57,21 @@ public:
     explicit Lexer(const std::string& filename) : lexLoc({1,0}), curTok(nullptr), curChar(' ') {
         fname = filename;
         file = new std::ifstream(filename);
+        getNextToken();
     }
     bool good() {return file->good();}
     std::string getFileName() {return fname;}
     Token getCurrentToken() {return *curTok;}
+    TokenType getCurrentTokenType() {return curTok->Type;}
+    std::string getCurrentLocString() {return curTok->Loc.toString();}
     Token getNextToken();
+    TokenType getNextTokenType() {return getNextToken().Type;}
+
+    std::streampos getFilePos() {return file->tellg();}
+    std::istream& setFilePos(const Token& tok, std::streampos pos) {
+        curTok->copy(tok);
+        return file->seekg(pos);
+    }
 };
 
 #endif //BRAINPLUS_LEXER_H

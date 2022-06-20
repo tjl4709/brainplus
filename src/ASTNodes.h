@@ -256,6 +256,8 @@ protected:
 public:
     DefineNode(std::string id, StatementNode *statement, Location l) : IncludeNode(std::move(id), l),
         Statement(statement) { Type = NodeType::Define; }
+    std::string getIdentifier() { return Id; }
+    StatementNode* getReplacement() { return Statement; }
     std::string toString() override { return "define " + Id + " " + Statement->toString(); }
 };
 class FunctionNode : public DefineNode {

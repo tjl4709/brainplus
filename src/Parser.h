@@ -11,15 +11,17 @@
 
 class Parser {
     Lexer *lexer;
+    std::vector<DefineNode*>* defines;
     // parser helper functions
+    StatementNode* getDefine(const std::string& iden);
 public:
-    explicit Parser(Lexer *l) : lexer(l) {
+    explicit Parser(Lexer *l, std::vector<DefineNode*>* d) : lexer(l), defines(d) {
         if (!lexer->good()) throw std::exception(("IOException: " + lexer->getFileName() + " not good").c_str());
     }
-    IncludeNode parseInclude();
-    DefineNode parseDefine();
-    FunctionNode parseFunction();
-    StatementNode parseCode();
+    IncludeNode* parseInclude();
+    DefineNode* parseDefine();
+    FunctionNode* parseFunction();
+    StatementNode* parseCode();
 };
 
 

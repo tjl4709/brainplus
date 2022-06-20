@@ -7,7 +7,13 @@ Token::Token(TokenType t, Location l) : Type(t), Loc(l), Number(0) {}
 Token::Token(int n, Location l) : Type(TokenType::t_number), Loc(l), Number(n) {}
 Token::Token(std::string id, Location l) : Type(TokenType::t_identifier), Loc(l), Number(0), Identifier(std::move(id)) {}
 
-std::string Token::toString() {
+void Token::copy(const Token& tok) {
+    Loc = tok.Loc;
+    Type = tok.Type;
+    Identifier = Type == TokenType::t_identifier ? tok.Identifier : "";
+    Number = Type == TokenType::t_number ? tok.Number : 0;
+}
+std::string Token::toString() const {
     switch (Type) {
         case t_eof: return "EOF";
         case t_include: return "include";
