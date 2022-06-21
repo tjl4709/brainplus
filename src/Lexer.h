@@ -62,10 +62,11 @@ public:
     bool good() {return file->good();}
     std::string getFileName() {return fname;}
     Token getCurrentToken() {return *curTok;}
-    TokenType getCurrentTokenType() {return curTok->Type;}
+    TokenType getCurrentType() {return curTok->Type;}
     std::string getCurrentLocString() {return curTok->Loc.toString();}
+    std::string getCurrentIdentifier() {return curTok->Identifier;}
     Token getNextToken();
-    TokenType getNextTokenType() {return getNextToken().Type;}
+    TokenType getNextType() {return getNextToken().Type;}
 
     std::streampos getFilePos() {return file->tellg();}
     std::istream& setFilePos(const Token& tok, std::streampos pos) {

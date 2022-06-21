@@ -142,11 +142,27 @@ public:
         return ret.substr(1);
     }
 
-    void addStatement(StatementNode *statement) { Statements->push_back(statement); }
+    void addStatement(StatementNode *statement) {
+        if (statement->getType() == NodeType::MultiStatement)
+            addAllStatements((MultiStatementNode*)statement);
+        else Statements->push_back(statement);
+    }
+    void addAllStatements(MultiStatementNode *multi) {
+        for (auto *node : *multi->Statements)
+            addStatement(node);
+    }
     bool insertStatement(StatementNode *statement, int index) {
+        if (statement->getType() == NodeType::MultiStatement)
+            return insertAllStatements((MultiStatementNode*)statement, index);
         if (index < 0 || index > Statements->size())
             return false;
         Statements->insert(Statements->begin() + index, statement);
+        return true;
+    }
+    bool insertAllStatements(MultiStatementNode *multi, int index) {
+        if (index < 0 || index > Statements->size())
+            return false;
+        Statements->insert(Statements->begin() + index, multi->Statements->begin(), multi->Statements->end());
         return true;
     }
     bool removeStatement(int index) {
@@ -168,6 +184,12 @@ class NumberNode : public StatementNode {
 public:
     NumberNode(int n, Location l) : StatementNode(l, NodeType::Number), Number(n) {}
     std::string toString() override { return "N:" + std::to_string(Number); }
+};
+class CallNode : public StatementNode {
+    std::string Id;
+public:
+    CallNode(std::string id, Location l) : StatementNode(l), Id(std::move(id)) { Type = NodeType::Call; }
+    std::string toString() override { return Id; }
 };
 //Operator nodes
 class NullaryOperatorNode : public StatementNode {
@@ -237,18 +259,13 @@ public:
     }
 };
 
-//Include, define, and function definition and call nodes
+//Include, define, and function definition nodes
 class IncludeNode : public ASTNode {
 protected:
     std::string Id;
 public:
     IncludeNode(std::string id, Location l) : ASTNode(l, NodeType::Include), Id(std::move(id)) {}
     std::string toString() override { return "include " + Id; }
-};
-class CallNode : public IncludeNode {
-public:
-    CallNode(std::string id, Location l) : IncludeNode(std::move(id), l) { Type = NodeType::Call; }
-    std::string toString() override { return Id; }
 };
 class DefineNode : public IncludeNode {
 protected:
