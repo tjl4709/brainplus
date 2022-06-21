@@ -17,19 +17,18 @@ class Parser {
     // find helper functions
     DefineNode* getDefine(const std::string& iden);
     FunctionNode* getFunction(const std::string& iden);
-    // error logging helper functions
-    static StatementNode* logError(const std::string& msg);
-    static IncludeNode* logErrorI(const std::string& msg);
-    static DefineNode* logErrorD(const std::string& msg);
-    static FunctionNode* logErrorF(const std::string& msg);
+    // error logging helper function
+    template <typename T = StatementNode>
+    static T *logError(const std::string& msg);
     //parsing helper functions
     IfTernaryNode *parseIf();
     ForNode *parseFor();
-    DoWhileNode *parseDoWhile();
+    DoWhileNode *parseWhile();
+    DoWhileNode *parseDo();
     StatementNode *parseOp();
     StatementNode *parseMultary();
     StatementNode *parseStatement();
-    MultiStatementNode *parseMultiStatement();
+    StatementNode *parseMultiStatement(bool forceMulti = false);
 public:
     explicit Parser(Lexer *l, std::vector<DefineNode*>* d, std::vector<FunctionNode*>* f) :
         lexer(l), defines(d), funcs(f), defComp(false) {

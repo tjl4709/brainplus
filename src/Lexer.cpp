@@ -5,12 +5,14 @@
 
 Token::Token(TokenType t, Location l) : Type(t), Loc(l), Number(0) {}
 Token::Token(int n, Location l) : Type(TokenType::t_number), Loc(l), Number(n) {}
-Token::Token(std::string id, Location l) : Type(TokenType::t_identifier), Loc(l), Number(0), Identifier(std::move(id)) {}
+Token::Token(std::string id, bool isIden, Location l) : Type(isIden ? TokenType::t_identifier : TokenType::t_string),
+    Loc(l), Number(0), Identifier(std::move(id)) {}
+Token::Token(std::string id, Location l) : Token(std::move(id), true, l) {}
 
 void Token::copy(const Token& tok) {
     Loc = tok.Loc;
     Type = tok.Type;
-    Identifier = Type == TokenType::t_identifier ? tok.Identifier : "";
+    Identifier = Type == TokenType::t_identifier || Type == TokenType::t_string ? tok.Identifier : "";
     Number = Type == TokenType::t_number ? tok.Number : 0;
 }
 std::string Token::toString() const {
@@ -25,6 +27,7 @@ std::string Token::toString() const {
         case t_do: return "do";
         case t_number: return "N:" + std::to_string(Number);
         case t_identifier: return "ID:" + Identifier;
+        case t_string: return "S:" + Identifier;
         default: return {0, (char)Type};
     }
 }
@@ -131,6 +134,11 @@ Token Lexer::getNextToken() {
             advance(); //eat '/'
             return getNextToken();
         } else throw std::exception(("SyntaxException: Unexpected '/' at " + curLoc.toString()).c_str());
+    } else if (curChar == '\"') {
+        std::string str;
+        while (advance() != '\"')
+            str += (char)curChar;
+        return *(curTok = new Token(str, false, curLoc));
     } else if (curChar == EOF) tt = TokenType::t_eof;
     else tt = (TokenType)curChar;
 

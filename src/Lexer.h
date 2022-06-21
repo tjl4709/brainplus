@@ -30,7 +30,8 @@ enum TokenType {
 
     //primary
     t_number    =  -9,
-    t_identifier= -10
+    t_identifier= -10,
+    t_string    = -11
 };
 class Token {
 public:
@@ -40,6 +41,7 @@ public:
     Location Loc;
     Token(TokenType t, Location l);
     Token(int n, Location l);
+    Token(std::string id, bool isIden, Location l);
     Token(std::string id, Location l);
     void copy(const Token& tok);
     std::string toString() const;
@@ -63,8 +65,9 @@ public:
     std::string getFileName() {return fname;}
     Token getCurrentToken() {return *curTok;}
     TokenType getCurrentType() {return curTok->Type;}
-    std::string getCurrentLocString() {return curTok->Loc.toString();}
     std::string getCurrentIdentifier() {return curTok->Identifier;}
+    Location getCurrentLocation() {return curTok->Loc;}
+    std::string getCurrentLocString() {return curTok->Loc.toString();}
     Token getNextToken();
     TokenType getNextType() {return getNextToken().Type;}
 

@@ -65,7 +65,8 @@ enum Operator {
     ptr_equalTo,        // @==
     ptr_notEqual,       // @!=
 
-    //boolean binary operators
+    //boolean operators
+    bool_not,           // !!
     bool_and,           // &&
     bool_or,            // ||
     bool_xor            // ^^
