@@ -46,7 +46,7 @@ ForNode *Parser::parseFor() {
     if (lexer->getNextType() != (TokenType)'(')
         return logError<ForNode>("SyntaxException: Expected '(' after \"for\" at " + lexer->getCurrentLocString());
     lexer->getNextToken(); //eat '('
-    StatementNode *start = parseStatement(), *expr, *step, *body;
+    StatementNode *start = parseMultiStatement(true), *expr, *step, *body;
     if (!start) return nullptr;
     if (lexer->getCurrentType() != (TokenType)';')
         return logError<ForNode>("SyntaxException: Expected ';' after for initializer at " + lexer->getCurrentLocString());
@@ -55,7 +55,7 @@ ForNode *Parser::parseFor() {
     if (lexer->getCurrentType() != (TokenType)';')
         return logError<ForNode>("SyntaxException: Expected ';' after for condition at " + lexer->getCurrentLocString());
     lexer->getNextToken(); //eat ';'
-    if (!(step = parseStatement())) return nullptr;
+    if (!(step = parseMultiStatement(true))) return nullptr;
     if (lexer->getCurrentType() != (TokenType)')')
         return logError<ForNode>("SyntaxException: Expected ')' after for step at " + lexer->getCurrentLocString());
     lexer->getNextToken(); //eat ')'
@@ -92,7 +92,39 @@ StatementNode *Parser::parseMultary() {
 }
 StatementNode *Parser::parseStatement() {
     // stop at ')', ';'
-    return nullptr;
+    StatementNode *s = nullptr;
+    switch (lexer->getCurrentType()) {
+        case t_eof:
+            return nullptr;
+        case t_include: case t_define:
+        case t_else:    case t_string:
+            return logError("SyntaxException: Unexpected token - " + TypeToString(lexer->getCurrentType()) +
+                " at " + lexer->getCurrentLocString());
+        case t_if: return parseIf();
+        case t_for:return parseFor();
+        case t_while: return parseWhile();
+        case t_do: return parseDo();
+        case t_number:
+            s = new NumberNode(lexer->getCurrentToken().Number, lexer->getCurrentLocation());
+            break;
+        case t_identifier:
+            DefineNode *d;
+            if ((d = getDefine(lexer->getCurrentIdentifier()))) {
+                s = d->getReplacement();
+                s->setLocation(lexer->getCurrentLocation());
+            } else if (getFunction(lexer->getCurrentIdentifier()))
+                s = new CallNode(lexer->getCurrentIdentifier(), lexer->getCurrentLocation());
+            else return logError("SyntaxException: Unexpected identifier - \"" + lexer->getCurrentIdentifier() +
+                    "\" at " + lexer->getCurrentLocString());
+            break;
+        default: break;
+    }
+    if (s) {
+        lexer->getNextToken();
+        return s;
+    }
+    if (!(s = parseOp())) return nullptr;
+    return parseMultary();
 }
 StatementNode *Parser::parseMultiStatement(bool forceMulti) {   //default: false
     //stop at '}', EOF, "define", when parsing define and unknown identifier is found
@@ -101,23 +133,22 @@ StatementNode *Parser::parseMultiStatement(bool forceMulti) {   //default: false
             return parseStatement();
         else lexer->getNextToken(); //eat '{'
     }
-    Location l = lexer->getCurrentLocation();
-    auto* statements = new std::vector<StatementNode*>();
+    auto* multi = new MultiStatementNode(lexer->getCurrentLocation());
     StatementNode *stat;
     while (lexer->getCurrentType() != (TokenType)'}' && lexer->getCurrentType() != TokenType::t_eof &&
         lexer->getCurrentType() != TokenType::t_define && (defComp || getDefine(lexer->getCurrentIdentifier()) != nullptr))
     {
         stat = parseStatement();
         if (stat == nullptr) break;
-        statements->push_back(stat);
+        multi->addStatement(stat);
     }
     if (lexer->getCurrentType() == (TokenType)'}')
         lexer->getNextToken(); //eat '}'
     else if (!forceMulti)
-        return logError("SyntaxException: No matching '}' for '{' at " + l.toString());
-    if (statements->empty()) return nullptr;
-    if (statements->size() == 1) return statements->front();
-    return new MultiStatementNode(statements, l);
+        return logError("SyntaxException: No matching '}' for '{' at " + multi->getLocString());
+    if (multi->getNumStatements() == 0) return nullptr;
+    if (multi->getNumStatements() == 1) return multi->getStatement(0);
+    return multi;
 }
 
 //public functions

@@ -8,105 +8,6 @@
 #include <vector>
 #include "Lexer.h"
 
-enum NodeType {
-    Base,
-    Statement,
-    MultiStatement,
-    Number,
-    NullaryOperator,
-    UnaryOperator,
-    BinaryOperator,
-    Do,
-    While,
-    If,
-    Ternary,
-    For,
-    Include,
-    Call,
-    Define,
-    Function
-};
-enum Operator {
-    //nullary operators
-    print,              // .
-    read,               // ,
-
-    //unary value operators
-    addition,           // +
-    subtraction,        // -
-    multiplication,     // *
-    division,           // /
-    assignment,         // =
-    //unary ptr operators
-    ptr_addition,       // @+
-    ptr_subtraction,    // @-
-    ptr_multiplication, // @*
-    ptr_division,       // @/
-    ptr_assignment,     // @=
-
-    //pointer operators
-    ptr_store,          // #
-    ptr_lookup,         // @
-    ptr_lookupRelUp,    // @#
-    ptr_lookupRelDown,  // @##
-
-    //value comparison operators
-    lessThan,           // <
-    greaterThan,        // >
-    lessOrEqual,        // <=
-    greaterOrEqual,     // >=
-    equalTo,            // ==
-    notEqual,           // !=
-    //ptr comparison operators
-    ptr_lessThan,       // @<
-    ptr_greaterThan,    // @>
-    ptr_lessOrEqual,    // @<=
-    ptr_greaterOrEqual, // @>=
-    ptr_equalTo,        // @==
-    ptr_notEqual,       // @!=
-
-    //boolean operators
-    bool_not,           // !!
-    bool_and,           // &&
-    bool_or,            // ||
-    bool_xor            // ^^
-};
-std::string OpToStr(Operator op) {
-    switch (op) {
-        case print:             return ".";
-        case read:              return ",";
-        case addition:          return "+";
-        case subtraction:       return "-";
-        case multiplication:    return "*";
-        case division:          return "/";
-        case assignment:        return "=";
-        case ptr_addition:      return "@+";
-        case ptr_subtraction:   return "@-";
-        case ptr_multiplication:return "@*";
-        case ptr_division:      return "@/";
-        case ptr_assignment:    return "@=";
-        case ptr_store:         return "#";
-        case ptr_lookup:        return "@";
-        case ptr_lookupRelUp:   return "@#";
-        case ptr_lookupRelDown: return "@##";
-        case lessThan:          return "<";
-        case greaterThan:       return ">";
-        case lessOrEqual:       return "<=";
-        case greaterOrEqual:    return ">=";
-        case equalTo:           return "==";
-        case notEqual:          return "!=";
-        case ptr_lessThan:      return "@<";
-        case ptr_greaterThan:   return "@>";
-        case ptr_lessOrEqual:   return "@<=";
-        case ptr_greaterOrEqual:return "@>=";
-        case ptr_equalTo:       return "@==";
-        case ptr_notEqual:      return "@!=";
-        case bool_and:          return "&&";
-        case bool_or:           return "||";
-        case bool_xor:          return "^^";
-    }
-}
-
 //Base Abstract Syntax Tree Node class
 class ASTNode {
     Location Loc;
@@ -117,6 +18,8 @@ public:
     explicit ASTNode(Location l) : ASTNode(l, NodeType::Base) {}
     int getLine() const { return Loc.Line; }
     int getCol() const { return Loc.Col; }
+    std::string getLocString() { return Loc.toString(); }
+    void setLocation(Location l) { Loc = l; }
     NodeType getType() { return Type; }
     virtual std::string toString() { return " at " + Loc.toString(); }
 };
@@ -134,7 +37,7 @@ class MultiStatementNode : public StatementNode {
 public:
     MultiStatementNode(std::vector<StatementNode*> *statements, Location l) : StatementNode(l, NodeType::MultiStatement),
         Statements(statements == nullptr ? new std::vector<StatementNode*> : statements) {}
-    explicit MultiStatementNode(Location l) : MultiStatementNode(nullptr, l) {}
+    explicit MultiStatementNode(Location l) : MultiStatementNode(new std::vector<StatementNode*>(), l) {}
     std::string toString() override {
         if (Statements->empty()) return "";
         std::string ret;
@@ -178,6 +81,7 @@ public:
         Statements->erase(elem);
         return true;
     }
+    unsigned int getNumStatements() { return Statements->size(); }
     StatementNode* getStatement(int index) { return Statements->at(index); }
 };
 class NumberNode : public StatementNode {

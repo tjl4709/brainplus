@@ -3,10 +3,11 @@
 //
 #include "Lexer.h"
 
-Token::Token(TokenType t, Location l) : Type(t), Loc(l), Number(0) {}
-Token::Token(int n, Location l) : Type(TokenType::t_number), Loc(l), Number(n) {}
-Token::Token(std::string id, bool isIden, Location l) : Type(isIden ? TokenType::t_identifier : TokenType::t_string),
-    Loc(l), Number(0), Identifier(std::move(id)) {}
+Token::Token(TokenType t, Location l) : Type(t), Loc(l), Number(0), Op(Operator::null) {}
+Token::Token(int n, Location l) : Token(TokenType::t_number, l) { Number = n; }
+Token::Token(Operator op, Location l) : Token(TokenType::t_op, l) { Op = op; }
+Token::Token(std::string id, bool isIden, Location l) : Token(isIden ? TokenType::t_identifier : TokenType::t_string, l)
+    { Identifier = std::move(id); }
 Token::Token(std::string id, Location l) : Token(std::move(id), true, l) {}
 
 void Token::copy(const Token& tok) {
@@ -44,14 +45,97 @@ int Lexer::advance() {
         lexLoc.Col++;
     return curChar;
 }
+Operator Lexer::parseOp() {
+    Operator op = Operator::null;
+    switch (curChar) {
+        case '.': op = Operator::print; break;
+        case ',': op = Operator::read; break;
+        case '+': op = Operator::addition; break;
+        case '-': op = Operator::subtraction; break;
+        case '*': op = Operator::multiplication; break;
+        case '/': op = Operator::division; break;
+        case '#': op = Operator::ptr_store; break;
+        case '=':
+            if (advance() == '=') {
+                op = Operator::equalTo;
+                break;
+            } else return Operator::assignment;
+        case '!':
+            if (advance() == '!')
+                op = Operator::bool_not;
+            else if (curChar == '=')
+                op = Operator::notEqual;
+            else return Operator::bit_not;
+            break;
+        case '&':
+            if (advance() == '&') {
+                op = Operator::bool_and;
+                break;
+            } else return Operator::bit_and;
+        case '|':
+            if (advance() == '|') {
+                op = Operator::bool_or;
+                break;
+            } else return Operator::bit_or;
+        case '^':
+            if (advance() == '^') {
+                op = Operator::bool_xor;
+                break;
+            } else return Operator::bit_xor;
+        case '<':
+            if (advance() == '=') {
+                op = Operator::lessOrEqual;
+                break;
+            } else return Operator::lessThan;
+        case '>':
+            if (advance() == '=') {
+                op = Operator::greaterOrEqual;
+                break;
+            } else return Operator::greaterThan;
+        case '@': { //ptr operators
+            advance();
+            std::streampos pos = file->tellg();
+            switch(parseOp()) {
+                case Operator::addition:       return Operator::ptr_addition;
+                case Operator::subtraction:    return Operator::ptr_subtraction;
+                case Operator::multiplication: return Operator::ptr_multiplication;
+                case Operator::division:       return Operator::ptr_division;
+                case Operator::assignment:     return Operator::ptr_assignment;
+                case Operator::lessThan:       return Operator::ptr_lessThan;
+                case Operator::lessOrEqual:    return Operator::ptr_lessOrEqual;
+                case Operator::greaterThan:    return Operator::ptr_greaterThan;
+                case Operator::greaterOrEqual: return Operator::ptr_greaterOrEqual;
+                case Operator::equalTo:        return Operator::ptr_equalTo;
+                case Operator::notEqual:       return Operator::ptr_notEqual;
+                case Operator::bit_not:        return Operator::ptr_not;
+                case Operator::bit_and:        return Operator::ptr_and;
+                case Operator::bit_or:         return Operator::ptr_or;
+                case Operator::bit_xor:        return Operator::ptr_xor;
+                case Operator::ptr_store:
+                    if (curChar == '#') {
+                        op = Operator::ptr_lookupRelDown;
+                        break;
+                    } else return Operator::ptr_lookupRelUp;
+                default:
+                    file->seekg(pos); //reset position in case non-ptr op parsed
+                    return Operator::ptr_lookup;
+            }
+            break;
+        }
+        default: return Operator::null;
+    }
+    advance();
+    return op;
+}
 Token Lexer::getNextToken() {
     while (isspace(curChar))
         advance();
     Location curLoc = lexLoc;
     TokenType tt;
+    Operator op;
 
     if (isalpha(curChar)) {
-        std::string str(1, curChar);
+        std::string str(1, (char)curChar);
         while(isalnum(advance()))
             str += (char)curChar;
 
@@ -133,14 +217,16 @@ Token Lexer::getNextToken() {
             } while (curChar != '/');
             advance(); //eat '/'
             return getNextToken();
-        } else throw std::exception(("SyntaxException: Unexpected '/' at " + curLoc.toString()).c_str());
+        } else return *(curTok = new Token(Operator::division, curLoc));
     } else if (curChar == '\"') {
         std::string str;
         while (advance() != '\"')
             str += (char)curChar;
         return *(curTok = new Token(str, false, curLoc));
     } else if (curChar == EOF) tt = TokenType::t_eof;
-    else tt = (TokenType)curChar;
+    else if ((op = parseOp()) != Operator::null) {
+        return *(curTok = new Token(op, curLoc));
+    } else tt = (TokenType)curChar;
 
     advance();
     return *(curTok = new Token(tt, curLoc));

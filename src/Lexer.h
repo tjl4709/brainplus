@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 #include <fstream>
-
+#include "enums.h"
 
 struct Location {
     int Line, Col;
@@ -16,31 +16,16 @@ struct Location {
     }
 };
 
-enum TokenType {
-    t_eof       =  -1,
-
-    //keywords
-    t_include   =  -2,
-    t_define    =  -3,
-    t_if        =  -4,
-    t_else      =  -5,
-    t_for       =  -6,
-    t_while     =  -7,
-    t_do        =  -8,
-
-    //primary
-    t_number    =  -9,
-    t_identifier= -10,
-    t_string    = -11
-};
 class Token {
 public:
     TokenType Type;
     int Number;
+    Operator Op;
     std::string Identifier;
     Location Loc;
     Token(TokenType t, Location l);
     Token(int n, Location l);
+    Token(Operator op, Location l);
     Token(std::string id, bool isIden, Location l);
     Token(std::string id, Location l);
     void copy(const Token& tok);
@@ -55,6 +40,7 @@ private:
     std::ifstream *file;
     int curChar;
     int advance();
+    Operator parseOp();
 public:
     explicit Lexer(const std::string& filename) : lexLoc({1,0}), curTok(nullptr), curChar(' ') {
         fname = filename;
