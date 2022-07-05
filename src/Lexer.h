@@ -52,6 +52,7 @@ public:
     Token getCurrentToken() {return *curTok;}
     TokenType getCurrentType() {return curTok->Type;}
     std::string getCurrentIdentifier() {return curTok->Identifier;}
+    Operator getCurrentOp() {return curTok->Op;}
     Location getCurrentLocation() {return curTok->Loc;}
     std::string getCurrentLocString() {return curTok->Loc.toString();}
     Token getNextToken();

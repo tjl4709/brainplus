@@ -37,6 +37,7 @@ std::string TypeToString(TokenType t) {
         case t_number:  return "number";
         case t_identifier:return "identifier";
         case t_string:  return "string";
+        case t_op:      return "operator";
         default: return {1, (char)t};
     }
 }
@@ -79,20 +80,20 @@ enum Operator {
     ptr_division,       // @/
     ptr_assignment,     // @=
 
-    //pointer operators
+    //pointer operators (unary)
     ptr_store,          // #
     ptr_lookup,         // @
     ptr_lookupRelUp,    // @#
     ptr_lookupRelDown,  // @##
 
-    //value comparison operators
+    //value comparison operators (unary)
     lessThan,           // <
     greaterThan,        // >
     lessOrEqual,        // <=
     greaterOrEqual,     // >=
     equalTo,            // ==
     notEqual,           // !=
-    //ptr comparison operators
+    //ptr comparison operators (unary)
     ptr_lessThan,       // @<
     ptr_greaterThan,    // @>
     ptr_lessOrEqual,    // @<=
@@ -100,17 +101,17 @@ enum Operator {
     ptr_equalTo,        // @==
     ptr_notEqual,       // @!=
 
-    //value bitwise operators
+    //value bitwise operators (unary)
     bit_not,            // !
     bit_and,            // &
     bit_or,             // |
     bit_xor,            // ^
-    //ptr bitwise operators
+    //ptr bitwise operators (unary)
     ptr_not,            // @!
     ptr_and,            // @&
     ptr_or,             // @|
     ptr_xor,            // @^
-    //boolean operators
+    //boolean operators (binary)
     bool_not,           // !!
     bool_and,           // &&
     bool_or,            // ||
@@ -161,6 +162,8 @@ std::string OpToStr(Operator op) {
         case bool_xor:          return "^^";
     }
 }
-
+bool OpIsPtrLookup(Operator op) {
+    return op == Operator::ptr_lookup || op == Operator::ptr_lookupRelUp || op == ptr_lookupRelDown;
+}
 
 #endif //BRAINPLUS_ENUMS_H

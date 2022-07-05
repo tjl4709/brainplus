@@ -15,6 +15,7 @@ void Token::copy(const Token& tok) {
     Type = tok.Type;
     Identifier = Type == TokenType::t_identifier || Type == TokenType::t_string ? tok.Identifier : "";
     Number = Type == TokenType::t_number ? tok.Number : 0;
+    Op = Type == TokenType::t_op ? tok.Op : Operator::null;
 }
 std::string Token::toString() const {
     switch (Type) {
@@ -29,6 +30,7 @@ std::string Token::toString() const {
         case t_number: return "N:" + std::to_string(Number);
         case t_identifier: return "ID:" + Identifier;
         case t_string: return "S:" + Identifier;
+        case t_op: return "OP:" + OpToStr(Op);
         default: return {0, (char)Type};
     }
 }

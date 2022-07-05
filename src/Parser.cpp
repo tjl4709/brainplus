@@ -84,47 +84,55 @@ DoWhileNode *Parser::parseDo() {
     if (!(expr = parseStatement())) return nullptr;
     return new DoWhileNode(expr, body, false, l);
 }
-StatementNode *Parser::parseOp() {
-    return nullptr;
-}
-StatementNode *Parser::parseMultary() {
-    return nullptr;
-}
-StatementNode *Parser::parseStatement() {
-    // stop at ')', ';'
-    StatementNode *s = nullptr;
+StatementNode *Parser::parsePrimary() {
+    StatementNode *s;
     switch (lexer->getCurrentType()) {
-        case t_eof:
-            return nullptr;
-        case t_include: case t_define:
-        case t_else:    case t_string:
-            return logError("SyntaxException: Unexpected token - " + TypeToString(lexer->getCurrentType()) +
-                " at " + lexer->getCurrentLocString());
+        case t_eof: return nullptr;
         case t_if: return parseIf();
         case t_for:return parseFor();
         case t_while: return parseWhile();
         case t_do: return parseDo();
-        case t_number:
-            s = new NumberNode(lexer->getCurrentToken().Number, lexer->getCurrentLocation());
-            break;
-        case t_identifier:
+        case t_number: s = new NumberNode(lexer->getCurrentToken().Number, lexer->getCurrentLocation()); break;
+        case t_identifier: {
             DefineNode *d;
             if ((d = getDefine(lexer->getCurrentIdentifier()))) {
                 s = d->getReplacement();
                 s->setLocation(lexer->getCurrentLocation());
             } else if (getFunction(lexer->getCurrentIdentifier()))
                 s = new CallNode(lexer->getCurrentIdentifier(), lexer->getCurrentLocation());
-            else return logError("SyntaxException: Unexpected identifier - \"" + lexer->getCurrentIdentifier() +
-                    "\" at " + lexer->getCurrentLocString());
+            else return logError("SyntaxException: Unknown identifier - \"" + lexer->getCurrentIdentifier() +
+                "\" at " + lexer->getCurrentLocString());
             break;
-        default: break;
+        }
+        case t_op: {
+            Operator op = lexer->getCurrentOp();
+            Location l = lexer->getCurrentLocation();
+            if (op == Operator::print || op == Operator::read) {
+                s = new NullaryOperatorNode(op, l);
+            } else if (lexer->getNextType() == TokenType::t_number || lexer->getCurrentType() == TokenType::t_op &&
+                     OpIsPtrLookup(lexer->getCurrentOp())) {
+                s = new UnaryOperatorNode(op, parsePrimary(), l);
+            } else if (OpIsPtrLookup(op)) {
+                s = new UnaryOperatorNode(Operator::ptr_lookupRelUp, new NumberNode(0, l), l);
+            } else if (op == Operator::assignment || op == Operator::ptr_assignment || op == Operator::ptr_store) {
+                s = new UnaryOperatorNode(op, new NumberNode(0, l), l);
+            } else s = new UnaryOperatorNode(op, new NumberNode(1, l), l);
+            break;
+        }
+        default: return logError("SyntaxException: Unexpected token - " + TypeToString(lexer->getCurrentType()) +
+            " at " + lexer->getCurrentLocString());
     }
-    if (s) {
-        lexer->getNextToken();
-        return s;
-    }
-    if (!(s = parseOp())) return nullptr;
-    return parseMultary();
+    lexer->getNextToken();
+    return s;
+}
+StatementNode *Parser::parseMultary(StatementNode *lhs) {
+    return nullptr;
+}
+StatementNode *Parser::parseStatement() {
+    // stop at ')', ';'
+    auto p = parsePrimary();
+    if (!p) return nullptr;
+    return parseMultary(p);
 }
 StatementNode *Parser::parseMultiStatement(bool forceMulti) {   //default: false
     //stop at '}', EOF, "define", when parsing define and unknown identifier is found

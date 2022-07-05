@@ -25,8 +25,8 @@ class Parser {
     ForNode *parseFor();
     DoWhileNode *parseWhile();
     DoWhileNode *parseDo();
-    StatementNode *parseOp();
-    StatementNode *parseMultary();
+    StatementNode *parsePrimary();
+    StatementNode *parseMultary(StatementNode *lhs);
     StatementNode *parseStatement();
     StatementNode *parseMultiStatement(bool forceMulti = false);
 public:
