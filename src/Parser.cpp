@@ -5,14 +5,14 @@
 #include <string>
 #include "Parser.h"
 
-//find helper methods
-DefineNode* Parser::getDefine(const std::string& iden) {
+//helper finder functions
+DefineNode* GetDefine(const std::string& iden, std::vector<DefineNode*> *defines) {
     for (DefineNode* node : *defines)
         if (node->getIdentifier() == iden)
             return node;
     return nullptr;
 }
-FunctionNode *Parser::getFunction(const std::string &iden) {
+DefineNode* GetFunction(const std::string& iden, std::vector<FunctionNode*> *funcs) {
     for (FunctionNode* node : *funcs)
         if (node->getIdentifier() == iden)
             return node;
@@ -87,7 +87,8 @@ DoWhileNode *Parser::parseDo() {
 StatementNode *Parser::parsePrimary() {
     StatementNode *s;
     switch (lexer->getCurrentType()) {
-        case t_eof: return nullptr;
+        case t_eof: return logError("End of file reached");
+        case (TokenType)'(': lexer->getNextToken(); return parseStatement();
         case t_if: return parseIf();
         case t_for:return parseFor();
         case t_while: return parseWhile();
@@ -95,10 +96,10 @@ StatementNode *Parser::parsePrimary() {
         case t_number: s = new NumberNode(lexer->getCurrentToken().Number, lexer->getCurrentLocation()); break;
         case t_identifier: {
             DefineNode *d;
-            if ((d = getDefine(lexer->getCurrentIdentifier()))) {
+            if ((d = GetDefine(lexer->getCurrentIdentifier(), defines))) {
                 s = d->getReplacement();
                 s->setLocation(lexer->getCurrentLocation());
-            } else if (getFunction(lexer->getCurrentIdentifier()))
+            } else if (GetFunction(lexer->getCurrentIdentifier(), funcs))
                 s = new CallNode(lexer->getCurrentIdentifier(), lexer->getCurrentLocation());
             else return logError("SyntaxException: Unknown identifier - \"" + lexer->getCurrentIdentifier() +
                 "\" at " + lexer->getCurrentLocString());
@@ -109,14 +110,24 @@ StatementNode *Parser::parsePrimary() {
             Location l = lexer->getCurrentLocation();
             if (op == Operator::print || op == Operator::read) {
                 s = new NullaryOperatorNode(op, l);
-            } else if (lexer->getNextType() == TokenType::t_number || lexer->getCurrentType() == TokenType::t_op &&
-                     OpIsPtrLookup(lexer->getCurrentOp())) {
-                s = new UnaryOperatorNode(op, parsePrimary(), l);
+            } else if (OpIsValComp(op)) {
+                if (lexer->getNextType() != TokenType::t_number && (lexer->getCurrentType() != TokenType::t_op ||
+                    !OpIsPtrLookup(lexer->getCurrentOp())))
+                    return logError("SyntaxException: Comparative operator at " + l.toString() + " missing right "
+                         "hand-side operand");
+                auto p = parsePrimary();
+                if (!p) return nullptr;
+                return new BinaryOperatorNode(op, CurrentValLookup(l), p, l);
+            } else if (lexer->getNextType() == TokenType::t_number || op == Operator::bool_not ||
+                lexer->getCurrentType() == TokenType::t_op && OpIsPtrLookup(lexer->getCurrentOp())) {
+                auto p = parsePrimary();
+                if (!p) return nullptr;
+                return new UnaryOperatorNode(op, p, l);
             } else if (OpIsPtrLookup(op)) {
-                s = new UnaryOperatorNode(Operator::ptr_lookupRelUp, new NumberNode(0, l), l);
+                return CurrentValLookup(l);
             } else if (op == Operator::assignment || op == Operator::ptr_assignment || op == Operator::ptr_store) {
-                s = new UnaryOperatorNode(op, new NumberNode(0, l), l);
-            } else s = new UnaryOperatorNode(op, new NumberNode(1, l), l);
+                return new UnaryOperatorNode(op, new NumberNode(0, l), l);
+            } else return new UnaryOperatorNode(op, new NumberNode(1, l), l);
             break;
         }
         default: return logError("SyntaxException: Unexpected token - " + TypeToString(lexer->getCurrentType()) +
@@ -125,14 +136,35 @@ StatementNode *Parser::parsePrimary() {
     lexer->getNextToken();
     return s;
 }
-StatementNode *Parser::parseMultary(StatementNode *lhs) {
-    return nullptr;
+StatementNode *Parser::parseMultary(int opPrec, StatementNode *lhs) {
+    int curPrec;
+    Operator curOp;
+    Location l{};
+    StatementNode *rhs;
+    while (lexer->getCurrentType() == TokenType::t_op) {
+        curPrec = OpPrecedence(curOp = lexer->getCurrentOp());
+        if (curPrec < opPrec)
+            return lhs;
+        l = lexer->getCurrentLocation();
+        lexer->getNextToken(); //eat operator
+        if (!(rhs = parsePrimary()))
+            return nullptr;
+        if (lexer->getCurrentType() == TokenType::t_op && curPrec < OpPrecedence(lexer->getCurrentOp())
+            && !(rhs = parseMultary(curPrec + 1, rhs)))
+            return nullptr;
+        lhs = new BinaryOperatorNode(curOp, lhs, rhs, l);
+    }
+    return lhs;
 }
 StatementNode *Parser::parseStatement() {
     // stop at ')', ';'
     auto p = parsePrimary();
     if (!p) return nullptr;
-    return parseMultary(p);
+    if (lexer->getCurrentType() == (TokenType)')') {
+        lexer->getNextToken();
+        return p;
+    }
+    return parseMultary(0, p);
 }
 StatementNode *Parser::parseMultiStatement(bool forceMulti) {   //default: false
     //stop at '}', EOF, "define", when parsing define and unknown identifier is found
@@ -144,7 +176,7 @@ StatementNode *Parser::parseMultiStatement(bool forceMulti) {   //default: false
     auto* multi = new MultiStatementNode(lexer->getCurrentLocation());
     StatementNode *stat;
     while (lexer->getCurrentType() != (TokenType)'}' && lexer->getCurrentType() != TokenType::t_eof &&
-        lexer->getCurrentType() != TokenType::t_define && (defComp || getDefine(lexer->getCurrentIdentifier()) != nullptr))
+        lexer->getCurrentType() != TokenType::t_define && (defComp || GetDefine(lexer->getCurrentIdentifier(), defines) != nullptr))
     {
         stat = parseStatement();
         if (stat == nullptr) break;
@@ -177,7 +209,7 @@ DefineNode* Parser::parseDefine() {
     }
     if (lexer->getNextType() != TokenType::t_identifier)
         return logError<DefineNode>("SyntaxException: Expected identifier for define at " + lexer->getCurrentLocString());
-    if (getDefine(lexer->getCurrentIdentifier()) != nullptr)
+    if (GetDefine(lexer->getCurrentIdentifier(), defines) != nullptr)
         return logError<DefineNode>("MultipleDefinitionException: Define \"" + lexer->getCurrentIdentifier() +
             "\" at " + lexer->getCurrentLocString() + " is already defined");
     std::string iden = lexer->getCurrentIdentifier();
@@ -189,10 +221,10 @@ DefineNode* Parser::parseDefine() {
 FunctionNode* Parser::parseFunction() {
     if (lexer->getCurrentType() != TokenType::t_identifier)
         return nullptr;
-    if (getDefine(lexer->getCurrentIdentifier()) != nullptr)
+    if (GetDefine(lexer->getCurrentIdentifier(), defines) != nullptr)
         return logError<FunctionNode>("MultipleDefinitionException: Function " + lexer->getCurrentIdentifier() +
                          " overwrites a define with the same name");
-    if (getFunction(lexer->getCurrentIdentifier()) != nullptr)
+    if (GetFunction(lexer->getCurrentIdentifier(), funcs) != nullptr)
         return logError<FunctionNode>("MultipleDefinitionException: Function \"" + lexer->getCurrentIdentifier() +
             "\" at " + lexer->getCurrentLocString() + " is already defined");
     //save identifier token and file position in case code starts with identifier and we need to back up the lexer

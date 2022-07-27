@@ -170,6 +170,7 @@ protected:
     std::string Id;
 public:
     IncludeNode(std::string id, Location l) : ASTNode(l, NodeType::Include), Id(std::move(id)) {}
+    std::string getId() { return Id; }
     std::string toString() override { return "include " + Id; }
 };
 class DefineNode : public IncludeNode {
@@ -188,5 +189,9 @@ public:
         DefineNode(std::move(id), statement, l) { Type = NodeType::Function; }
     std::string toString() override { return Id + " {\n" + Statement->toString() + "\n}"; }
 };
+
+UnaryOperatorNode *CurrentValLookup(Location l) {
+    return new UnaryOperatorNode(Operator::ptr_lookupRelUp, new NumberNode(0, l), l);
+}
 
 #endif //BRAINPLUS_ASTNODES_H

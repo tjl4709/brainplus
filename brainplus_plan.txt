@@ -35,7 +35,6 @@ include | include file                       | 1
   for   | for(start;cond;step){}             | 2
  while  | while(cond){} -or- do{}while(cond) | 2
    do   | do{}while(cond)                    | 2
-   ?:   | cond?val1:val2                     | 2
 *where file is another .bp file which will also get parsed excluding top-level statements
 *where name is a string literal to be replaced with sub in code body
 *where 'cond' is a boolean condition which evaluates to false if zero, true otherwise

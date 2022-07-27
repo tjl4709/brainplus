@@ -9,14 +9,15 @@
 #include "Lexer.h"
 #include "ASTNodes.h"
 
+//helper find functions
+DefineNode* GetDefine(const std::string& iden, std::vector<DefineNode*> *defines);
+DefineNode* GetFunction(const std::string& iden, std::vector<FunctionNode*> *funcs);
+
 class Parser {
     Lexer *lexer;
     std::vector<DefineNode*>* defines;
     std::vector<FunctionNode*>* funcs;
     bool defComp;
-    // find helper functions
-    DefineNode* getDefine(const std::string& iden);
-    FunctionNode* getFunction(const std::string& iden);
     // error logging helper function
     template <typename T = StatementNode>
     static T *logError(const std::string& msg);
@@ -26,7 +27,7 @@ class Parser {
     DoWhileNode *parseWhile();
     DoWhileNode *parseDo();
     StatementNode *parsePrimary();
-    StatementNode *parseMultary(StatementNode *lhs);
+    StatementNode *parseMultary(int opPrec, StatementNode *lhs);
     StatementNode *parseStatement();
     StatementNode *parseMultiStatement(bool forceMulti = false);
 public:
@@ -34,6 +35,7 @@ public:
         lexer(l), defines(d), funcs(f), defComp(false) {
         if (!lexer->good()) throw std::exception(("IOException: " + lexer->getFileName() + " not good").c_str());
     }
+    bool good() { return lexer->good(); }
     IncludeNode* parseInclude();
     DefineNode* parseDefine();
     FunctionNode* parseFunction();

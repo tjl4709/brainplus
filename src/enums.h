@@ -165,5 +165,37 @@ std::string OpToStr(Operator op) {
 bool OpIsPtrLookup(Operator op) {
     return op == Operator::ptr_lookup || op == Operator::ptr_lookupRelUp || op == ptr_lookupRelDown;
 }
+bool OpIsValComp(Operator op) {
+    return op == Operator::lessThan || op == Operator::lessOrEqual || op == Operator::equalTo ||
+        op == Operator::greaterOrEqual || op == Operator::greaterThan || op == Operator::notEqual;
+}
+int OpPrecedence(Operator op) {
+    switch (op) {
+        default: return 0;
+        //nullary
+        case print: case read:
+            return 40;
+        //unary
+        case addition:     case subtraction:     case multiplication:     case division:     case assignment:
+        case ptr_addition: case ptr_subtraction: case ptr_multiplication: case ptr_division: case ptr_assignment:
+        case bit_not:      case bit_and:         case bit_or:             case bit_xor:
+        case ptr_not:      case ptr_and:         case ptr_or:             case ptr_xor:
+        case bool_not:
+            return 30;
+        //ptr operators
+        case ptr_store: case ptr_lookup: case ptr_lookupRelUp: case ptr_lookupRelDown:
+            return 35;
+        //binary
+        case bool_and: return 22;
+        case bool_xor: return 21;
+        case bool_or: return 20;
+        //comparison operators
+        case lessThan:           case greaterThan:     case lessOrEqual:
+        case ptr_lessThan:       case ptr_greaterThan: case ptr_lessOrEqual:
+        case greaterOrEqual:     case equalTo:         case notEqual:
+        case ptr_greaterOrEqual: case ptr_equalTo:     case ptr_notEqual:
+            return 25;
+    }
+}
 
 #endif //BRAINPLUS_ENUMS_H
