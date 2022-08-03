@@ -57,11 +57,40 @@ int main(int argc, char *argv[]) {
     }
     // loop thru includes:
     //   parse define statements. if define name in defines, throw error, otherwise add to defines
+    for (auto inc : includes)
+        while (auto def = inc.second->parseDefine())
+            defines.push_back(def);
     // loop thru define statements:
-    //   if contains reference to itself, throw error, otherwise replace any occurrence in other define statements
+    //   if contains reference to itself, throw error, otherwise replace any occurrence (call node) in other define statements
+    for (auto def : defines) {
+        if (def->getReplacement()->getType() == NodeType::MultiStatement) {
+            auto stmts = (MultiStatementNode *)def->getReplacement();
+            for (int i = 0; i < stmts->getNumStatements(); i++)
+                if (stmts->getStatement(i)->getType() == NodeType::Call &&
+                    ((CallNode *)stmts->getStatement(i))->getId() == def->getId())
+                    exit_msg("Recursive Defines are not allowed (" + def->getId() + ")", 4);
+        } else if (def->getReplacement()->getType() == NodeType::Call &&
+                   ((CallNode *)def->getReplacement())->getId() == def->getId())
+            exit_msg("Recursive Defines are not allowed (" + def->getId() + ")", 4);
+        for (auto d : defines)
+            if (def != d) {
+                if (d->getReplacement()->getType() == NodeType::MultiStatement) {
+                    auto stmts = (MultiStatementNode *) d->getReplacement();
+                    for (int i = 0; i < stmts->getNumStatements(); i++)
+                        if (stmts->getStatement(i)->getType() == NodeType::Call &&
+                            ((CallNode *) stmts->getStatement(i))->getId() == def->getId()) {
+                            stmts->removeStatement(i);
+                            stmts->insertStatement(def->getReplacement(), i);
+                        }
+                } else if (d->getReplacement()->getType() == NodeType::Call &&
+                           ((CallNode *) d->getReplacement())->getId() == def->getId())
+                    d->setReplacement(def->getReplacement());
+            }
+    }
     // loop thru includes:
-    //   insert defines into parser
     //   parse function definitions. if function name in functions or defines, throw error, otherwise add to functions
+    // loop thru defines:
+    //   check for any remaining call nodes that are unidentified
     // parse code statements in mainFile
     // codegen functions
     // codegen mainFile code statements

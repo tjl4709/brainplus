@@ -94,6 +94,7 @@ class CallNode : public StatementNode {
     std::string Id;
 public:
     CallNode(std::string id, Location l) : StatementNode(l), Id(std::move(id)) { Type = NodeType::Call; }
+    std::string getId() { return Id; }
     std::string toString() override { return Id; }
 };
 //Operator nodes
@@ -179,8 +180,8 @@ protected:
 public:
     DefineNode(std::string id, StatementNode *statement, Location l) : IncludeNode(std::move(id), l),
         Statement(statement) { Type = NodeType::Define; }
-    std::string getIdentifier() { return Id; }
     StatementNode* getReplacement() { return Statement; }
+    void setReplacement(StatementNode * stmt) { Statement = stmt; }
     std::string toString() override { return "define " + Id + " " + Statement->toString(); }
 };
 class FunctionNode : public DefineNode {

@@ -8,13 +8,13 @@
 //helper finder functions
 DefineNode* GetDefine(const std::string& iden, std::vector<DefineNode*> *defines) {
     for (DefineNode* node : *defines)
-        if (node->getIdentifier() == iden)
+        if (node->getId() == iden)
             return node;
     return nullptr;
 }
 DefineNode* GetFunction(const std::string& iden, std::vector<FunctionNode*> *funcs) {
     for (FunctionNode* node : *funcs)
-        if (node->getIdentifier() == iden)
+        if (node->getId() == iden)
             return node;
     return nullptr;
 }
@@ -96,7 +96,9 @@ StatementNode *Parser::parsePrimary() {
         case t_number: s = new NumberNode(lexer->getCurrentToken().Number, lexer->getCurrentLocation()); break;
         case t_identifier: {
             DefineNode *d;
-            if ((d = GetDefine(lexer->getCurrentIdentifier(), defines))) {
+            if (!defComp)
+                s = new CallNode(lexer->getCurrentIdentifier(), lexer->getCurrentLocation());
+            else if ((d = GetDefine(lexer->getCurrentIdentifier(), defines))) {
                 s = d->getReplacement();
                 s->setLocation(lexer->getCurrentLocation());
             } else if (GetFunction(lexer->getCurrentIdentifier(), funcs))
