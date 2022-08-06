@@ -2,13 +2,11 @@
 #include <vector>
 #include <map>
 #include <string>
-#include <string_view>
-#include "Lexer.h"
+#include <direct.h>
 #include "Parser.h"
-#include "ASTNodes.h"
 
 std::string mainFile;
-std::map<IncludeNode*,Parser*> includes;
+std::map<IncludeNode*,Parser*> *includes;
 std::vector<DefineNode*> defines;
 std::vector<FunctionNode*> functions;
 
@@ -33,31 +31,57 @@ int exit_msg(const std::string& msg, int code) {
 
 
 int main(int argc, char *argv[]) {
+    //create variables
+    includes = new std::map<IncludeNode*,Parser*>();
+
     // get mainFile and add to includes
     if (argc <= 1) exit_msg("A source file must be specified", 1);
     if (!cp_ends_with(argv[1], ".bp"))
         exit_msg("Brainplus source files must have \"bp\" extension", 2);
+    mainFile = argv[1];
+    if (mainFile.find(':') == -1) {
+        char* tmp = (char*)malloc(FILENAME_MAX);
+        std::string dir = _getcwd(tmp, FILENAME_MAX);
+        free(tmp);
+        if (dir[dir.size() - 1] == '\\' && mainFile[0] == '\\')
+            mainFile = dir + mainFile.substr(1);
+        else if (dir[dir.size() - 1] != '\\' && mainFile[0] != '\\')
+            mainFile = dir + '\\' + mainFile;
+    }
     auto *lexer = new Lexer(mainFile = argv[1]);
     if (!lexer->good()) exit_msg("Main file not found", 3);
-    includes.insert(std::pair<IncludeNode*, Parser*>(new IncludeNode(mainFile, {0, 0}),
+    includes->insert(std::pair<IncludeNode*, Parser*>(new IncludeNode(mainFile, {0, 0}),
                                                      new Parser(lexer, &defines, &functions)));
+    //add other included files to include?
+
     // loop thru includes:
     //   parse include statements. if not in inlcudes and lexer is good, then add to includes
-    for (auto it = includes.begin(); it != includes.end(); it++) {
-        while (auto inc = it->second->parseInclude()) {
+    for (auto it = includes->begin(); it != includes->end(); it++) {
+        while (auto inc = it->second->parseInclude(it->first->getDir())) {
+            bool keep = true;
             if (!cp_ends_with((char*)inc->getId().c_str(), ".bp"))
                 continue;
-            for (auto pair : includes)
-                if (pair.first->getId() == inc->getId())
-                    continue;
+            for (auto pair : *includes)
+                if (pair.first->getFname() == inc->getFname()) {
+                    keep = false;
+                    break;
+                }
+            if (!keep) continue;
             auto lex = new Lexer(inc->getId());
             if (lex->good())
-                includes.insert(std::pair<IncludeNode*, Parser*>(inc, new Parser(lex, &defines, &functions)));
+                includes->insert(std::pair<IncludeNode*, Parser*>(inc, new Parser(lex, &defines, &functions)));
         }
     }
+    /*TEST 1: Includes*/
+    std::cout << "Included files:";
+    for (auto inc : *includes)
+        std::cout << ' ' << inc.first->getFname();
+    std::cout << '\n';
+    /*END TEST 1*/
+
     // loop thru includes:
     //   parse define statements. if define name in defines, throw error, otherwise add to defines
-    for (auto inc : includes)
+    for (auto inc : *includes)
         while (auto def = inc.second->parseDefine())
             defines.push_back(def);
     // loop thru define statements:

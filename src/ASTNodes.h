@@ -6,7 +6,6 @@
 
 #include <utility>
 #include <vector>
-#include "Lexer.h"
 
 //Base Abstract Syntax Tree Node class
 class ASTNode {
@@ -103,7 +102,7 @@ protected:
     Operator Op;
 public:
     NullaryOperatorNode(Operator op, Location l) : StatementNode(l, NodeType::NullaryOperator), Op(op) {}
-    std::string toString() override { return OpToStr(Op); }
+    std::string toString() override { return EnumOps::OpToStr(Op); }
 };
 class UnaryOperatorNode : public NullaryOperatorNode {
 protected:
@@ -111,7 +110,7 @@ protected:
 public:                 //if RHS = null, implied default number
     UnaryOperatorNode(Operator op, StatementNode *rhs, Location l) : NullaryOperatorNode(op, l),
         RHS(rhs) { Type = NodeType::UnaryOperator; }
-    std::string toString() override { return OpToStr(Op) + ' ' + RHS->toString(); }
+    std::string toString() override { return EnumOps::OpToStr(Op) + ' ' + RHS->toString(); }
 };
 class BinaryOperatorNode : public UnaryOperatorNode {
     StatementNode *LHS; //Left-Hand Side = null if ptr op
@@ -171,8 +170,10 @@ protected:
     std::string Id;
 public:
     IncludeNode(std::string id, Location l) : ASTNode(l, NodeType::Include), Id(std::move(id)) {}
+    std::string getFname() { return Id.substr(Id.rfind('\\')+1); }
+    std::string getDir() { int i; return (i = Id.rfind('\\')) == -1 ? "." : Id.substr(0, i+1); }
     std::string getId() { return Id; }
-    std::string toString() override { return "include " + Id; }
+    std::string toString() override { return "include \"" + Id + '"'; }
 };
 class DefineNode : public IncludeNode {
 protected:
@@ -191,8 +192,11 @@ public:
     std::string toString() override { return Id + " {\n" + Statement->toString() + "\n}"; }
 };
 
-UnaryOperatorNode *CurrentValLookup(Location l) {
-    return new UnaryOperatorNode(Operator::ptr_lookupRelUp, new NumberNode(0, l), l);
-}
+class NodeOps {
+public:
+    static UnaryOperatorNode *CurrentValLookup(Location l) {
+        return new UnaryOperatorNode(Operator::ptr_lookupRelUp, new NumberNode(0, l), l);
+    }
+};
 
 #endif //BRAINPLUS_ASTNODES_H

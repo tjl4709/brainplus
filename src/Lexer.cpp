@@ -30,7 +30,7 @@ std::string Token::toString() const {
         case t_number: return "N:" + std::to_string(Number);
         case t_identifier: return "ID:" + Identifier;
         case t_string: return "S:" + Identifier;
-        case t_op: return "OP:" + OpToStr(Op);
+        case t_op: return "OP:" + EnumOps::OpToStr(Op);
         default: return {0, (char)Type};
     }
 }
@@ -222,8 +222,11 @@ Token Lexer::getNextToken() {
         } else return *(curTok = new Token(Operator::division, curLoc));
     } else if (curChar == '\"') {
         std::string str;
-        while (advance() != '\"')
+        while (advance() != '\"' && curChar != EOF)
             str += (char)curChar;
+        if (curChar == EOF)
+            throw std::exception(("SyntaxException: String literal never closed at "+curLoc.toString()).c_str());
+        advance(); //eat ending quote
         return *(curTok = new Token(str, false, curLoc));
     } else if (curChar == EOF) tt = TokenType::t_eof;
     else if ((op = parseOp()) != Operator::null) {

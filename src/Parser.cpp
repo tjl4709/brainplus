@@ -3,6 +3,7 @@
 //
 
 #include <string>
+#include <utility>
 #include "Parser.h"
 
 //helper finder functions
@@ -112,27 +113,27 @@ StatementNode *Parser::parsePrimary() {
             Location l = lexer->getCurrentLocation();
             if (op == Operator::print || op == Operator::read) {
                 s = new NullaryOperatorNode(op, l);
-            } else if (OpIsValComp(op)) {
+            } else if (EnumOps::OpIsValComp(op)) {
                 if (lexer->getNextType() != TokenType::t_number && (lexer->getCurrentType() != TokenType::t_op ||
-                    !OpIsPtrLookup(lexer->getCurrentOp())))
+                    !EnumOps::OpIsPtrLookup(lexer->getCurrentOp())))
                     return logError("SyntaxException: Comparative operator at " + l.toString() + " missing right "
                          "hand-side operand");
                 auto p = parsePrimary();
                 if (!p) return nullptr;
-                return new BinaryOperatorNode(op, CurrentValLookup(l), p, l);
+                return new BinaryOperatorNode(op, NodeOps::CurrentValLookup(l), p, l);
             } else if (lexer->getNextType() == TokenType::t_number || op == Operator::bool_not ||
-                lexer->getCurrentType() == TokenType::t_op && OpIsPtrLookup(lexer->getCurrentOp())) {
+                lexer->getCurrentType() == TokenType::t_op && EnumOps::OpIsPtrLookup(lexer->getCurrentOp())) {
                 auto p = parsePrimary();
                 if (!p) return nullptr;
                 return new UnaryOperatorNode(op, p, l);
-            } else if (OpIsPtrLookup(op)) {
-                return CurrentValLookup(l);
+            } else if (EnumOps::OpIsPtrLookup(op)) {
+                return NodeOps::CurrentValLookup(l);
             } else if (op == Operator::assignment || op == Operator::ptr_assignment || op == Operator::ptr_store) {
                 return new UnaryOperatorNode(op, new NumberNode(0, l), l);
             } else return new UnaryOperatorNode(op, new NumberNode(1, l), l);
             break;
         }
-        default: return logError("SyntaxException: Unexpected token - " + TypeToString(lexer->getCurrentType()) +
+        default: return logError("SyntaxException: Unexpected token - " + EnumOps::TypeToString(lexer->getCurrentType()) +
             " at " + lexer->getCurrentLocString());
     }
     lexer->getNextToken();
@@ -144,14 +145,14 @@ StatementNode *Parser::parseMultary(int opPrec, StatementNode *lhs) {
     Location l{};
     StatementNode *rhs;
     while (lexer->getCurrentType() == TokenType::t_op) {
-        curPrec = OpPrecedence(curOp = lexer->getCurrentOp());
+        curPrec = EnumOps::OpPrecedence(curOp = lexer->getCurrentOp());
         if (curPrec < opPrec)
             return lhs;
         l = lexer->getCurrentLocation();
         lexer->getNextToken(); //eat operator
         if (!(rhs = parsePrimary()))
             return nullptr;
-        if (lexer->getCurrentType() == TokenType::t_op && curPrec < OpPrecedence(lexer->getCurrentOp())
+        if (lexer->getCurrentType() == TokenType::t_op && curPrec < EnumOps::OpPrecedence(lexer->getCurrentOp())
             && !(rhs = parseMultary(curPrec + 1, rhs)))
             return nullptr;
         lhs = new BinaryOperatorNode(curOp, lhs, rhs, l);
@@ -194,12 +195,17 @@ StatementNode *Parser::parseMultiStatement(bool forceMulti) {   //default: false
 }
 
 //public functions
-IncludeNode* Parser::parseInclude() {
+IncludeNode* Parser::parseInclude(std::string dir) {
     if (lexer->getCurrentType() != TokenType::t_include)
         return nullptr;
     if (lexer->getNextType() != TokenType::t_string)
         return logError<IncludeNode>("SyntaxException: Expected file name as a string at " + lexer->getCurrentLocString());
-    std::string fname = lexer->getCurrentIdentifier();
+    std::string fname = lexer->getCurrentIdentifier().find(':') == -1 ? dir : "";
+    if (dir[dir.size()-1] == '\\' && lexer->getCurrentIdentifier()[0] == '\\')
+        fname = fname.erase(fname.size()-1, 1);
+    else if (dir[dir.size()-1] != '\\' && lexer->getCurrentIdentifier()[0] != '\\')
+        fname += '\\';
+    fname += lexer->getCurrentIdentifier();
     Location l = lexer->getCurrentLocation();
     lexer->getNextToken();
     return new IncludeNode(fname, l);

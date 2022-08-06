@@ -36,7 +36,7 @@ public:
         if (!lexer->good()) throw std::exception(("IOException: " + lexer->getFileName() + " not good").c_str());
     }
     bool good() { return lexer->good(); }
-    IncludeNode* parseInclude();
+    IncludeNode* parseInclude(std::string dir);
     DefineNode* parseDefine();
     FunctionNode* parseFunction();
     StatementNode* parseCode();
