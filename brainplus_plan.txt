@@ -30,6 +30,7 @@ Keyword | Syntax                             | Step to implement
 --------|------------------------------------|------------------
 include | include file                       | 1
  define | define name sub                    | 1
+ enddef | enddef                             | 1
    if   | if(cond){}                         | 2
   else  | if(cond){}else{}                   | 2
   for   | for(start;cond;step){}             | 2

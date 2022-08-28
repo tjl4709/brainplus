@@ -2,8 +2,14 @@
 #include <vector>
 #include <map>
 #include <string>
-#include <direct.h>
 #include "Parser.h"
+#ifdef _WINDOWS
+#include <direct.h>
+#define getCurDir _getcwd
+#else
+#include <unistd.h>
+#define getCurDir getcwd
+#endif
 
 std::string mainFile;
 std::map<IncludeNode*,Parser*> *includes;
@@ -11,10 +17,10 @@ std::vector<DefineNode*> defines;
 std::vector<FunctionNode*> functions;
 
 bool cp_ends_with(char* str, std::string suffix) {
-    int str_len = strlen(str), suf_len = suffix.size();
+    unsigned int str_len = strlen(str), suf_len = suffix.size();
     if (str_len < suf_len) return false;
-    for (str_len--, suf_len--; suf_len >= 0; str_len--, suf_len--)
-        if (tolower(str[str_len]) != tolower(suffix[suf_len]))
+    for (; suf_len > 0; )
+        if (tolower(str[--str_len]) != tolower(suffix[--suf_len]))
             return false;
     return true;
 }
@@ -24,10 +30,20 @@ char* cp_to_lower(char* str) {
             str[i] += 'a' - 'A';
     return str;
 }
+std::string join(std::vector<std::string> elems, const std::string& delim) {
+    std::string str;
+    if (!elems.empty()) {
+        str = elems[0];
+        for (auto i = elems.begin()+1; i < elems.end(); i++)
+            str += delim + *i;
+    }
+    return std::move(str);
+}
 int exit_msg(const std::string& msg, int code) {
     std::cerr << msg + '\n';
     exit(code);
 }
+
 
 
 int main(int argc, char *argv[]) {
@@ -41,7 +57,7 @@ int main(int argc, char *argv[]) {
     mainFile = argv[1];
     if (mainFile.find(':') == -1) {
         char* tmp = (char*)malloc(FILENAME_MAX);
-        std::string dir = _getcwd(tmp, FILENAME_MAX);
+        std::string dir = getCurDir(tmp, FILENAME_MAX);
         free(tmp);
         if (dir[dir.size() - 1] == '\\' && mainFile[0] == '\\')
             mainFile = dir + mainFile.substr(1);
@@ -72,7 +88,7 @@ int main(int argc, char *argv[]) {
                 includes->insert(std::pair<IncludeNode*, Parser*>(inc, new Parser(lex, &defines, &functions)));
         }
     }
-    /*TEST 1: Includes*/
+    /*TEST 1: Includes*
     std::cout << "Included files:";
     for (auto inc : *includes)
         std::cout << ' ' << inc.first->getFname();
@@ -84,33 +100,37 @@ int main(int argc, char *argv[]) {
     for (auto inc : *includes)
         while (auto def = inc.second->parseDefine())
             defines.push_back(def);
+    /*TEST 2.1: Recursive Defines*
+    std::cout << "Defines::\n";
+    for (auto def : defines)
+        std::cout << def->toString() + '\n';
+    /*END TEST 2.1*/
+
     // loop thru define statements:
     //   if contains reference to itself, throw error, otherwise replace any occurrence (call node) in other define statements
+    auto defNames = new std::vector<std::string>();
     for (auto def : defines) {
-        if (def->getReplacement()->getType() == NodeType::MultiStatement) {
-            auto stmts = (MultiStatementNode *)def->getReplacement();
-            for (int i = 0; i < stmts->getNumStatements(); i++)
-                if (stmts->getStatement(i)->getType() == NodeType::Call &&
-                    ((CallNode *)stmts->getStatement(i))->getId() == def->getId())
-                    exit_msg("Recursive Defines are not allowed (" + def->getId() + ")", 4);
-        } else if (def->getReplacement()->getType() == NodeType::Call &&
-                   ((CallNode *)def->getReplacement())->getId() == def->getId())
-            exit_msg("Recursive Defines are not allowed (" + def->getId() + ")", 4);
-        for (auto d : defines)
-            if (def != d) {
-                if (d->getReplacement()->getType() == NodeType::MultiStatement) {
-                    auto stmts = (MultiStatementNode *) d->getReplacement();
-                    for (int i = 0; i < stmts->getNumStatements(); i++)
-                        if (stmts->getStatement(i)->getType() == NodeType::Call &&
-                            ((CallNode *) stmts->getStatement(i))->getId() == def->getId()) {
-                            stmts->removeStatement(i);
-                            stmts->insertStatement(def->getReplacement(), i);
-                        }
-                } else if (d->getReplacement()->getType() == NodeType::Call &&
-                           ((CallNode *) d->getReplacement())->getId() == def->getId())
-                    d->setReplacement(def->getReplacement());
+        defNames->clear();
+        defNames->push_back(def->getId());
+        for (int i = 0; i < def->getNumReplacements(); i++)
+            if (def->getReplacement(i).Type == TokenType::t_identifier) {
+                if (def->getReplacement(i).Identifier == def->getId())
+                    exit_msg("RecursiveDefineException: Some or all of the following defines create a cycle - " +
+                             join(*defNames, ", "), 4);
+                for (auto d : defines)
+                    if (def->getReplacement(i).Identifier == d->getId()) {
+                        defNames->push_back(d->getId());
+                        def->setReplacement(d->getReplacements(), i--);
+                        break;
+                    }
             }
     }
+    /*TEST 2.2: Cyclic Defines*
+    std::cout << "\nDefines::\n";
+    for (auto def : defines)
+        std::cout << def->toString() + '\n';
+    /*END TEST 2.c*/
+
     // loop thru includes:
     //   parse function definitions. if function name in functions or defines, throw error, otherwise add to functions
     // loop thru defines:

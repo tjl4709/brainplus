@@ -1,1 +1,2 @@
 include "includeTests.bp"
+include "defineTests.bp"

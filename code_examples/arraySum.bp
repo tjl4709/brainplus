@@ -2,6 +2,7 @@
 define size  2
 define start 3
 define cntr  4
+enddef
 
 //size = size of array
 //start = first position in array

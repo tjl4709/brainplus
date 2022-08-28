@@ -13,7 +13,7 @@ DefineNode* GetDefine(const std::string& iden, std::vector<DefineNode*> *defines
             return node;
     return nullptr;
 }
-DefineNode* GetFunction(const std::string& iden, std::vector<FunctionNode*> *funcs) {
+FunctionNode* GetFunction(const std::string& iden, std::vector<FunctionNode*> *funcs) {
     for (FunctionNode* node : *funcs)
         if (node->getId() == iden)
             return node;
@@ -25,15 +25,25 @@ T *Parser::logError(const std::string& msg) {
     fprintf(stderr, "%s.\n", msg.c_str());
     return nullptr;
 }
+
 //code parsing helper functions
+void Parser::checkForDefine() {
+    DefineNode *d;
+    if (lexer->getCurrentType() == TokenType::t_identifier &&
+        (d = GetDefine(lexer->getCurrentIdentifier(), defines)))
+        lexer->setReplacement(d->getReplacements());
+}
 IfTernaryNode *Parser::parseIf() {
     //precondition: current token is "if"
     Location l = lexer->getCurrentLocation();
-    if (lexer->getNextType() != (TokenType)'(')
+    lexer->getNextToken();
+    checkForDefine();
+    if (lexer->getCurrentType() != (TokenType)'(')
         return logError<IfTernaryNode>("SyntaxException: Expected '(' after \"if\" at " + lexer->getCurrentLocString());
     StatementNode *expr = parseStatement(), *body, *elseBody = nullptr;
     if (!expr || !(body = parseMultiStatement()))
         return nullptr;
+    checkForDefine();
     if (lexer->getCurrentType() == TokenType::t_else) {
         lexer->getNextToken(); //eat "else"
         if (!(elseBody = parseMultiStatement()))
@@ -44,19 +54,24 @@ IfTernaryNode *Parser::parseIf() {
 ForNode *Parser::parseFor() {
     //precondition: current token is "for"
     Location l = lexer->getCurrentLocation();
-    if (lexer->getNextType() != (TokenType)'(')
+    lexer->getNextToken();
+    checkForDefine();
+    if (lexer->getCurrentType() != (TokenType)'(')
         return logError<ForNode>("SyntaxException: Expected '(' after \"for\" at " + lexer->getCurrentLocString());
     lexer->getNextToken(); //eat '('
     StatementNode *start = parseMultiStatement(true), *expr, *step, *body;
     if (!start) return nullptr;
+    checkForDefine();
     if (lexer->getCurrentType() != (TokenType)';')
         return logError<ForNode>("SyntaxException: Expected ';' after for initializer at " + lexer->getCurrentLocString());
     lexer->getNextToken(); //eat ';'
     if (!(expr = parseStatement())) return nullptr;
+    checkForDefine();
     if (lexer->getCurrentType() != (TokenType)';')
         return logError<ForNode>("SyntaxException: Expected ';' after for condition at " + lexer->getCurrentLocString());
     lexer->getNextToken(); //eat ';'
     if (!(step = parseMultiStatement(true))) return nullptr;
+    checkForDefine();
     if (lexer->getCurrentType() != (TokenType)')')
         return logError<ForNode>("SyntaxException: Expected ')' after for step at " + lexer->getCurrentLocString());
     lexer->getNextToken(); //eat ')'
@@ -66,7 +81,9 @@ ForNode *Parser::parseFor() {
 DoWhileNode *Parser::parseWhile() {
     //precondition: current token is "while"
     Location l = lexer->getCurrentLocation();
-    if (lexer->getNextType() != (TokenType)'(')
+    lexer->getNextToken();
+    checkForDefine();
+    if (lexer->getCurrentType() != (TokenType)'(')
         return logError<DoWhileNode>("SyntaxException: Expected '(' after \"while\" at " + lexer->getCurrentLocString());
     StatementNode *expr = parseStatement(), *body;
     if (!expr || !(body = parseMultiStatement())) return nullptr;
@@ -78,9 +95,12 @@ DoWhileNode *Parser::parseDo() {
     lexer->getNextToken(); //eat "do"
     StatementNode *expr, *body = parseMultiStatement();
     if (!body) return nullptr;
+    checkForDefine();
     if (lexer->getCurrentType() != TokenType::t_while)
         return logError<DoWhileNode>("SyntaxException: Expected \"while\" after do loop at " + lexer->getCurrentLocString());
-    if (lexer->getNextType() != (TokenType)'(')
+    lexer->getNextToken();
+    checkForDefine();
+    if (lexer->getCurrentType() != (TokenType)'(')
         return logError<DoWhileNode>("SyntaxException: Expected '(' after \"while\" at " + lexer->getCurrentLocString());
     if (!(expr = parseStatement())) return nullptr;
     return new DoWhileNode(expr, body, false, l);
@@ -97,11 +117,9 @@ StatementNode *Parser::parsePrimary() {
         case t_number: s = new NumberNode(lexer->getCurrentToken().Number, lexer->getCurrentLocation()); break;
         case t_identifier: {
             DefineNode *d;
-            if (!defComp)
-                s = new CallNode(lexer->getCurrentIdentifier(), lexer->getCurrentLocation());
-            else if ((d = GetDefine(lexer->getCurrentIdentifier(), defines))) {
-                s = d->getReplacement();
-                s->setLocation(lexer->getCurrentLocation());
+            if ((d = GetDefine(lexer->getCurrentIdentifier(), defines))) {
+                lexer->setReplacement(d->getReplacements());
+                return parsePrimary();
             } else if (GetFunction(lexer->getCurrentIdentifier(), funcs))
                 s = new CallNode(lexer->getCurrentIdentifier(), lexer->getCurrentLocation());
             else return logError("SyntaxException: Unknown identifier - \"" + lexer->getCurrentIdentifier() +
@@ -144,6 +162,7 @@ StatementNode *Parser::parseMultary(int opPrec, StatementNode *lhs) {
     Operator curOp;
     Location l{};
     StatementNode *rhs;
+    checkForDefine();
     while (lexer->getCurrentType() == TokenType::t_op) {
         curPrec = EnumOps::OpPrecedence(curOp = lexer->getCurrentOp());
         if (curPrec < opPrec)
@@ -152,6 +171,7 @@ StatementNode *Parser::parseMultary(int opPrec, StatementNode *lhs) {
         lexer->getNextToken(); //eat operator
         if (!(rhs = parsePrimary()))
             return nullptr;
+        checkForDefine();
         if (lexer->getCurrentType() == TokenType::t_op && curPrec < EnumOps::OpPrecedence(lexer->getCurrentOp())
             && !(rhs = parseMultary(curPrec + 1, rhs)))
             return nullptr;
@@ -163,6 +183,7 @@ StatementNode *Parser::parseStatement() {
     // stop at ')', ';'
     auto p = parsePrimary();
     if (!p) return nullptr;
+    checkForDefine();
     if (lexer->getCurrentType() == (TokenType)')') {
         lexer->getNextToken();
         return p;
@@ -170,18 +191,20 @@ StatementNode *Parser::parseStatement() {
     return parseMultary(0, p);
 }
 StatementNode *Parser::parseMultiStatement(bool forceMulti) {   //default: false
-    //stop at '}', EOF, "define", when parsing define and unknown identifier is found
+    //stop at '}', EOF
     if (!forceMulti) {
+        checkForDefine();
         if (lexer->getCurrentType() != (TokenType) '{')
             return parseStatement();
         else lexer->getNextToken(); //eat '{'
     }
     auto* multi = new MultiStatementNode(lexer->getCurrentLocation());
     StatementNode *stat;
-    while (lexer->getCurrentType() != (TokenType)'}' && lexer->getCurrentType() != TokenType::t_eof &&
-        lexer->getCurrentType() != TokenType::t_define && (defComp || GetDefine(lexer->getCurrentIdentifier(), defines) != nullptr))
+    checkForDefine();
+    while (lexer->getCurrentType() != (TokenType)'}' && lexer->getCurrentType() != TokenType::t_eof)
     {
         stat = parseStatement();
+        checkForDefine();
         if (stat == nullptr) break;
         multi->addStatement(stat);
     }
@@ -212,6 +235,8 @@ IncludeNode* Parser::parseInclude(std::string dir) {
 }
 DefineNode* Parser::parseDefine() {
     if (lexer->getCurrentType() != TokenType::t_define) {
+        if (lexer->getCurrentType() == TokenType::t_enddef)
+            lexer->getNextToken();
         defComp = true;
         return nullptr;
     }
@@ -222,9 +247,13 @@ DefineNode* Parser::parseDefine() {
             "\" at " + lexer->getCurrentLocString() + " is already defined");
     std::string iden = lexer->getCurrentIdentifier();
     Location l = lexer->getCurrentLocation();
-    lexer->getNextToken(); //eat identifier
-    StatementNode *replacement = parseMultiStatement(true);
-    return new DefineNode(iden, replacement, l);
+    auto rep = new std::vector<Token>();
+    while (lexer->getNextType() != TokenType::t_define && lexer->getCurrentType() != TokenType::t_enddef)
+        if (lexer->getCurrentType() == TokenType::t_identifier && lexer->getCurrentIdentifier() == iden)
+            return logError<DefineNode>("RecursiveDefineException: Define \"" + iden + "\" contains a reference to itself");
+        else
+            rep->push_back(lexer->getCurrentToken());
+    return new DefineNode(iden, rep, l);
 }
 FunctionNode* Parser::parseFunction() {
     if (lexer->getCurrentType() != TokenType::t_identifier)
@@ -238,15 +267,14 @@ FunctionNode* Parser::parseFunction() {
     //save identifier token and file position in case code starts with identifier and we need to back up the lexer
     Token iden = lexer->getCurrentToken();
     std::streampos p = lexer->getFilePos();
+    checkForDefine();
     if (lexer->getNextType() != (TokenType)'{') {
         //back up lexer to previous identifier token
+        //TODO change this to use new replacement system for defines
         lexer->setFilePos(iden, p);
         return nullptr;
     }
     StatementNode* body = parseMultiStatement();
-    if (lexer->getCurrentType() != (TokenType)'}')
-        return logError<FunctionNode>("SyntaxException: Expected \"}\" to close method at" + lexer->getCurrentLocString());
-    lexer->getNextToken(); //eat '}'
     return new FunctionNode(iden.Identifier, body, iden.Loc);
 }
 StatementNode* Parser::parseCode() {

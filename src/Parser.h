@@ -11,7 +11,7 @@
 
 //helper find functions
 DefineNode* GetDefine(const std::string& iden, std::vector<DefineNode*> *defines);
-DefineNode* GetFunction(const std::string& iden, std::vector<FunctionNode*> *funcs);
+FunctionNode* GetFunction(const std::string& iden, std::vector<FunctionNode*> *funcs);
 
 class Parser {
     Lexer *lexer;
@@ -22,6 +22,7 @@ class Parser {
     template <typename T = StatementNode>
     static T *logError(const std::string& msg);
     //parsing helper functions
+    void checkForDefine();
     IfTernaryNode *parseIf();
     ForNode *parseFor();
     DoWhileNode *parseWhile();
