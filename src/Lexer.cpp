@@ -38,7 +38,7 @@ std::string Token::toString() const {
 
 int Lexer::advance() {
     curChar = file->get();
-    if (curChar == '\r')
+    while (curChar == '\r')
         curChar = file->get();
     if (curChar == '\n') {
         lexLoc.Line++;
@@ -48,7 +48,7 @@ int Lexer::advance() {
     return curChar;
 }
 Operator Lexer::parseOp() {
-    Operator op = Operator::null;
+    Operator op;
     switch (curChar) {
         case '.': op = Operator::print; break;
         case ',': op = Operator::read; break;
@@ -130,25 +130,32 @@ Operator Lexer::parseOp() {
     return op;
 }
 Token Lexer::getNextToken() {
+    if (!defRep->empty()) {
+        curTok = defRep->back();
+        defRep->pop_back();
+        curTok.Loc = lexLoc;
+        return curTok;
+    }
     while (isspace(curChar))
         advance();
     Location curLoc = lexLoc;
     TokenType tt;
     Operator op;
 
-    if (isalpha(curChar)) {
+    if (isalpha(curChar) || curChar == '_') {
         std::string str(1, (char)curChar);
-        while(isalnum(advance()))
+        while(isalnum(advance()) || curChar == '_')
             str += (char)curChar;
 
         if (str == "include") tt = TokenType::t_include;
         else if (str == "define") tt = TokenType::t_define;
+        else if (str == "enddef") tt = TokenType::t_enddef;
         else if (str == "if") tt = TokenType::t_if;
         else if (str == "else") tt = TokenType::t_else;
         else if (str == "for") tt = TokenType::t_for;
         else if (str == "while") tt = TokenType::t_while;
         else if (str == "do") tt = TokenType::t_do;
-        else return *(curTok = new Token(str, curLoc));
+        else return curTok = *new Token(str, curLoc);
     } else if (isdigit(curChar)) {
         int n = 0;
         do {
@@ -167,7 +174,7 @@ Token Lexer::getNextToken() {
                 n = (n << 4) + t;
             }
         }
-        return *(curTok = new Token(n, curLoc));
+        return curTok = *new Token(n, curLoc);
     } else if (curChar == '\'') {
         if (advance() == '\'') {
             advance();
@@ -191,7 +198,7 @@ Token Lexer::getNextToken() {
                 case '6': curChar = '\6'; break;
                 case '7': curChar = '\7'; break;
             }
-        curTok = new Token(curChar, curLoc);
+        curTok = *new Token(curChar, curLoc);
         if (advance() != '\'') {
             while (advance() != '\'' && curChar != EOF);
             if (curChar == EOF)
@@ -202,7 +209,7 @@ Token Lexer::getNextToken() {
                                   "character constant at " + curLoc.toString()).c_str());
         }
         advance();
-        return *curTok;
+        return curTok;
     } else if (curChar == '/') {
         advance();
         if (curChar == '/') {
@@ -219,7 +226,7 @@ Token Lexer::getNextToken() {
             } while (curChar != '/');
             advance(); //eat '/'
             return getNextToken();
-        } else return *(curTok = new Token(Operator::division, curLoc));
+        } else return curTok = *new Token(Operator::division, curLoc);
     } else if (curChar == '\"') {
         std::string str;
         while (advance() != '\"' && curChar != EOF)
@@ -227,12 +234,12 @@ Token Lexer::getNextToken() {
         if (curChar == EOF)
             throw std::exception(("SyntaxException: String literal never closed at "+curLoc.toString()).c_str());
         advance(); //eat ending quote
-        return *(curTok = new Token(str, false, curLoc));
+        return curTok = *new Token(str, false, curLoc);
     } else if (curChar == EOF) tt = TokenType::t_eof;
     else if ((op = parseOp()) != Operator::null) {
-        return *(curTok = new Token(op, curLoc));
+        return curTok = *new Token(op, curLoc);
     } else tt = (TokenType)curChar;
 
     advance();
-    return *(curTok = new Token(tt, curLoc));
+    return curTok = *new Token(tt, curLoc);
 }

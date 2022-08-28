@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 #include <fstream>
+#include <vector>
 #include "enums.h"
 
 struct Location {
@@ -23,6 +24,7 @@ public:
     Operator Op;
     std::string Identifier;
     Location Loc;
+    Token(){}   //*only temporary for Lexer constructor. DO NOT USE
     Token(TokenType t, Location l);
     Token(int n, Location l);
     Token(Operator op, Location l);
@@ -35,33 +37,43 @@ public:
 class Lexer {
 private:
     Location lexLoc;
-    Token *curTok;
+    Token curTok;
     std::string fname;
+    std::vector<Token> *defRep;
     std::ifstream *file;
     int curChar;
     int advance();
     Operator parseOp();
 public:
-    explicit Lexer(const std::string& filename) : lexLoc({1,0}), curTok(nullptr), curChar(' ') {
+    explicit Lexer(const std::string& filename) : lexLoc({1,0}), curChar(' ') {
+        defRep = new std::vector<Token>();
         fname = filename;
         file = new std::ifstream(filename);
         getNextToken();
     }
-    bool good() {return file->good();}
-    std::string getFileName() {return fname;}
-    Token getCurrentToken() {return *curTok;}
-    TokenType getCurrentType() {return curTok->Type;}
-    std::string getCurrentIdentifier() {return curTok->Identifier;}
-    Operator getCurrentOp() {return curTok->Op;}
-    Location getCurrentLocation() {return curTok->Loc;}
-    std::string getCurrentLocString() {return curTok->Loc.toString();}
+
+    Token getCurrentToken() {return curTok;}
+    TokenType getCurrentType() const {return curTok.Type;}
+    std::string getCurrentIdentifier() const {return curTok.Identifier;}
+    Operator getCurrentOp() const {return curTok.Op;}
+    Location getCurrentLocation() const {return curTok.Loc;}
+    std::string getCurrentLocString() const {return curTok.Loc.toString();}
+
     Token getNextToken();
     TokenType getNextType() {return getNextToken().Type;}
 
+    bool good() {return file->good();}
+    std::string getFileName() {return fname;}
     std::streampos getFilePos() {return file->tellg();}
     std::istream& setFilePos(const Token& tok, std::streampos pos) {
-        curTok->copy(tok);
+        curTok.copy(tok);
         return file->seekg(pos);
+    }
+    void setReplacement(std::vector<Token> *rep) {
+        for (unsigned int i = rep->size();i > 1;)
+            defRep->push_back(rep->at(--i));
+        curTok = rep->front();
+        curTok.Loc = lexLoc;
     }
 };
 

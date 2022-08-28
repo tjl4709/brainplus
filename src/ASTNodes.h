@@ -36,7 +36,7 @@ class MultiStatementNode : public StatementNode {
 public:
     MultiStatementNode(std::vector<StatementNode*> *statements, Location l) : StatementNode(l, NodeType::MultiStatement),
         Statements(statements == nullptr ? new std::vector<StatementNode*> : statements) {}
-    explicit MultiStatementNode(Location l) : MultiStatementNode(new std::vector<StatementNode*>(), l) {}
+    explicit MultiStatementNode(Location l) : MultiStatementNode(nullptr, l) {}
     std::string toString() override {
         if (Statements->empty()) return "";
         std::string ret;
@@ -171,24 +171,36 @@ protected:
 public:
     IncludeNode(std::string id, Location l) : ASTNode(l, NodeType::Include), Id(std::move(id)) {}
     std::string getFname() { return Id.substr(Id.rfind('\\')+1); }
-    std::string getDir() { int i; return (i = Id.rfind('\\')) == -1 ? "." : Id.substr(0, i+1); }
+    std::string getDir() { unsigned int i; return (i = Id.rfind('\\')) == -1 ? "." : Id.substr(0, i+1); }
     std::string getId() { return Id; }
     std::string toString() override { return "include \"" + Id + '"'; }
 };
 class DefineNode : public IncludeNode {
 protected:
+    std::vector<Token> *Replacement;
+public:
+    DefineNode(std::string id, std::vector<Token> *replacement, Location l) : IncludeNode(std::move(id), l),
+        Replacement(replacement) { Type = NodeType::Define; }
+    std::vector<Token> *getReplacements() { return Replacement; }
+    unsigned int getNumReplacements() { return Replacement->size(); }
+    Token getReplacement(int i) { return Replacement->at(i); }
+    void setReplacement(std::vector<Token> *rep, int i) {
+        Replacement->erase(Replacement->begin() + i);
+        Replacement->insert(Replacement->begin() + i, rep->begin(), rep->end());
+    }
+    std::string toString() override {
+        std::string str;
+        for (const auto& tok : *Replacement)
+            str += " " + tok.toString();
+        return "define " + Id + ":" + str;
+    }
+};
+class FunctionNode : public IncludeNode {
+protected:
     StatementNode *Statement;
 public:
-    DefineNode(std::string id, StatementNode *statement, Location l) : IncludeNode(std::move(id), l),
-        Statement(statement) { Type = NodeType::Define; }
-    StatementNode* getReplacement() { return Statement; }
-    void setReplacement(StatementNode * stmt) { Statement = stmt; }
-    std::string toString() override { return "define " + Id + " " + Statement->toString(); }
-};
-class FunctionNode : public DefineNode {
-public:
     FunctionNode(std::string id, StatementNode *statement, Location l) :
-        DefineNode(std::move(id), statement, l) { Type = NodeType::Function; }
+        IncludeNode(std::move(id), l), Statement(statement) { Type = NodeType::Function; }
     std::string toString() override { return Id + " {\n" + Statement->toString() + "\n}"; }
 };
 

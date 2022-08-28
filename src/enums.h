@@ -12,17 +12,18 @@ enum TokenType {
     //keywords
     t_include   =  -2,
     t_define    =  -3,
-    t_if        =  -4,
-    t_else      =  -5,
-    t_for       =  -6,
-    t_while     =  -7,
-    t_do        =  -8,
+    t_enddef    =  -4,
+    t_if        =  -5,
+    t_else      =  -6,
+    t_for       =  -7,
+    t_while     =  -8,
+    t_do        =  -9,
 
     //primary
-    t_number    =  -9,
-    t_identifier= -10,
-    t_string    = -11,
-    t_op        = -12
+    t_number    = -10,
+    t_identifier= -11,
+    t_string    = -12,
+    t_op        = -13
 };
 enum NodeType {
     Base,
