@@ -1,0 +1,8 @@
+include "arraySum.bp"
+//define recursive recursive //should fail since it contains itself
+//define back      forth     //should fail bc it makes a loop with forth
+//define forth     back      //   "    "   "  "    "   "  "    "   back
+define num_ptr   0x004B    //test normal use case of storing address
+define num       @num_ptr  //test normal use case of accessing address
+define size      2         //should fail bc "size" already exists in arraySum
+enddef
