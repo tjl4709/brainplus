@@ -129,11 +129,20 @@ int main(int argc, char *argv[]) {
     std::cout << "\nDefines::\n";
     for (auto def : defines)
         std::cout << def->toString() + '\n';
-    /*END TEST 2.c*/
+    /*END TEST 2.2*/
 
     // loop thru includes:
     //   parse function definitions. if function name in functions or defines, throw error, otherwise add to functions
-    // loop thru defines:
+    for (auto inc : *includes)
+        while (auto func = inc.second->parseFunction())
+            functions.push_back(func);
+    /*TEST 3: Function Definitions*
+    std::cout << "Function::\n";
+    for (auto func : functions)
+        std::cout << func->toString() + '\n';
+    /*END TEST 3*/
+
+    // loop thru defines and functions:
     //   check for any remaining call nodes that are unidentified
     // parse code statements in mainFile
     // codegen functions

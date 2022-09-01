@@ -95,7 +95,8 @@ Operator Lexer::parseOp() {
                 break;
             } else return Operator::greaterThan;
         case '@': { //ptr operators
-            advance();
+            if (advance() == '@')
+                return Operator::ptr_lookup;
             std::streampos pos = file->tellg();
             switch(parseOp()) {
                 case Operator::addition:       return Operator::ptr_addition;

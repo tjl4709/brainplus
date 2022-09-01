@@ -226,6 +226,9 @@ public:
         return op == Operator::lessThan || op == Operator::lessOrEqual || op == Operator::equalTo ||
                op == Operator::greaterOrEqual || op == Operator::greaterThan || op == Operator::notEqual;
     }
+    static bool OpIsMultary(Operator op) {
+        return OpIsValComp(op) || op == bool_and || op ==bool_or || op == bool_xor;
+    }
     static int OpPrecedence(Operator op) {
         switch (op) {
             default:

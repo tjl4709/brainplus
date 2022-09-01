@@ -27,9 +27,9 @@ class Parser {
     ForNode *parseFor();
     DoWhileNode *parseWhile();
     DoWhileNode *parseDo();
-    StatementNode *parsePrimary();
+    StatementNode *parsePrimary(int parenDepth);
     StatementNode *parseMultary(int opPrec, StatementNode *lhs);
-    StatementNode *parseStatement();
+    StatementNode *parseStatement(int parenDepth = 0);
     StatementNode *parseMultiStatement(bool forceMulti = false);
 public:
     explicit Parser(Lexer *l, std::vector<DefineNode*>* d, std::vector<FunctionNode*>* f) :

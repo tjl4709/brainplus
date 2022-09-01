@@ -64,16 +64,18 @@ public:
 
     bool good() {return file->good();}
     std::string getFileName() {return fname;}
-    std::streampos getFilePos() {return file->tellg();}
-    std::istream& setFilePos(const Token& tok, std::streampos pos) {
-        curTok.copy(tok);
-        return file->seekg(pos);
-    }
     void setReplacement(std::vector<Token> *rep) {
         for (unsigned int i = rep->size();i > 1;)
             defRep->push_back(rep->at(--i));
         curTok = rep->front();
         curTok.Loc = lexLoc;
+    }
+    void rollback(Token tkns[], unsigned int len) {
+        defRep->push_back(curTok);
+        curTok = *tkns;
+        tkns += len;
+        while (--len > 0)
+            defRep->push_back(*--tkns);
     }
 };
 

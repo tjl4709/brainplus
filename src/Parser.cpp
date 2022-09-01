@@ -43,7 +43,6 @@ IfTernaryNode *Parser::parseIf() {
     StatementNode *expr = parseStatement(), *body, *elseBody = nullptr;
     if (!expr || !(body = parseMultiStatement()))
         return nullptr;
-    checkForDefine();
     if (lexer->getCurrentType() == TokenType::t_else) {
         lexer->getNextToken(); //eat "else"
         if (!(elseBody = parseMultiStatement()))
@@ -61,7 +60,6 @@ ForNode *Parser::parseFor() {
     lexer->getNextToken(); //eat '('
     StatementNode *start = parseMultiStatement(true), *expr, *step, *body;
     if (!start) return nullptr;
-    checkForDefine();
     if (lexer->getCurrentType() != (TokenType)';')
         return logError<ForNode>("SyntaxException: Expected ';' after for initializer at " + lexer->getCurrentLocString());
     lexer->getNextToken(); //eat ';'
@@ -71,7 +69,6 @@ ForNode *Parser::parseFor() {
         return logError<ForNode>("SyntaxException: Expected ';' after for condition at " + lexer->getCurrentLocString());
     lexer->getNextToken(); //eat ';'
     if (!(step = parseMultiStatement(true))) return nullptr;
-    checkForDefine();
     if (lexer->getCurrentType() != (TokenType)')')
         return logError<ForNode>("SyntaxException: Expected ')' after for step at " + lexer->getCurrentLocString());
     lexer->getNextToken(); //eat ')'
@@ -95,7 +92,6 @@ DoWhileNode *Parser::parseDo() {
     lexer->getNextToken(); //eat "do"
     StatementNode *expr, *body = parseMultiStatement();
     if (!body) return nullptr;
-    checkForDefine();
     if (lexer->getCurrentType() != TokenType::t_while)
         return logError<DoWhileNode>("SyntaxException: Expected \"while\" after do loop at " + lexer->getCurrentLocString());
     lexer->getNextToken();
@@ -105,11 +101,12 @@ DoWhileNode *Parser::parseDo() {
     if (!(expr = parseStatement())) return nullptr;
     return new DoWhileNode(expr, body, false, l);
 }
-StatementNode *Parser::parsePrimary() {
+
+StatementNode *Parser::parsePrimary(int parenDepth) {
     StatementNode *s;
     switch (lexer->getCurrentType()) {
         case t_eof: return logError("End of file reached");
-        case (TokenType)'(': lexer->getNextToken(); return parseStatement();
+        case (TokenType)'(': lexer->getNextToken(); return parseStatement(parenDepth + 1);
         case t_if: return parseIf();
         case t_for:return parseFor();
         case t_while: return parseWhile();
@@ -119,7 +116,7 @@ StatementNode *Parser::parsePrimary() {
             DefineNode *d;
             if ((d = GetDefine(lexer->getCurrentIdentifier(), defines))) {
                 lexer->setReplacement(d->getReplacements());
-                return parsePrimary();
+                return parsePrimary(parenDepth);
             } else if (GetFunction(lexer->getCurrentIdentifier(), funcs))
                 s = new CallNode(lexer->getCurrentIdentifier(), lexer->getCurrentLocation());
             else return logError("SyntaxException: Unknown identifier - \"" + lexer->getCurrentIdentifier() +
@@ -129,19 +126,21 @@ StatementNode *Parser::parsePrimary() {
         case t_op: {
             Operator op = lexer->getCurrentOp();
             Location l = lexer->getCurrentLocation();
+            lexer->getNextToken();
+            checkForDefine();
             if (op == Operator::print || op == Operator::read) {
                 s = new NullaryOperatorNode(op, l);
             } else if (EnumOps::OpIsValComp(op)) {
-                if (lexer->getNextType() != TokenType::t_number && (lexer->getCurrentType() != TokenType::t_op ||
+                if (lexer->getCurrentType() != TokenType::t_number && (lexer->getCurrentType() != TokenType::t_op ||
                     !EnumOps::OpIsPtrLookup(lexer->getCurrentOp())))
                     return logError("SyntaxException: Comparative operator at " + l.toString() + " missing right "
                          "hand-side operand");
-                auto p = parsePrimary();
+                auto p = parsePrimary(parenDepth);
                 if (!p) return nullptr;
                 return new BinaryOperatorNode(op, NodeOps::CurrentValLookup(l), p, l);
-            } else if (lexer->getNextType() == TokenType::t_number || op == Operator::bool_not ||
+            } else if (lexer->getCurrentType() == TokenType::t_number || op == Operator::bool_not ||
                 lexer->getCurrentType() == TokenType::t_op && EnumOps::OpIsPtrLookup(lexer->getCurrentOp())) {
-                auto p = parsePrimary();
+                auto p = parsePrimary(parenDepth);
                 if (!p) return nullptr;
                 return new UnaryOperatorNode(op, p, l);
             } else if (EnumOps::OpIsPtrLookup(op)) {
@@ -163,13 +162,13 @@ StatementNode *Parser::parseMultary(int opPrec, StatementNode *lhs) {
     Location l{};
     StatementNode *rhs;
     checkForDefine();
-    while (lexer->getCurrentType() == TokenType::t_op) {
+    while (lexer->getCurrentType() == TokenType::t_op && EnumOps::OpIsMultary(lexer->getCurrentOp())) {
         curPrec = EnumOps::OpPrecedence(curOp = lexer->getCurrentOp());
         if (curPrec < opPrec)
             return lhs;
         l = lexer->getCurrentLocation();
         lexer->getNextToken(); //eat operator
-        if (!(rhs = parsePrimary()))
+        if (!(rhs = parsePrimary(0)))
             return nullptr;
         checkForDefine();
         if (lexer->getCurrentType() == TokenType::t_op && curPrec < EnumOps::OpPrecedence(lexer->getCurrentOp())
@@ -179,29 +178,38 @@ StatementNode *Parser::parseMultary(int opPrec, StatementNode *lhs) {
     }
     return lhs;
 }
-StatementNode *Parser::parseStatement() {
+StatementNode *Parser::parseStatement(int parenDepth) {
     // stop at ')', ';'
-    auto p = parsePrimary();
+    auto p = parsePrimary(parenDepth);
     if (!p) return nullptr;
     checkForDefine();
     if (lexer->getCurrentType() == (TokenType)')') {
-        lexer->getNextToken();
+        if (parenDepth > 0) {
+            lexer->getNextToken();
+            parenDepth--;
+        }
         return p;
     }
-    return parseMultary(0, p);
+    p = parseMultary(0, p);
+    if (lexer->getCurrentType() == (TokenType)')' && parenDepth > 0) {
+        lexer->getNextToken(); //eat ')'
+        parenDepth--;
+    }
+    return p;
 }
 StatementNode *Parser::parseMultiStatement(bool forceMulti) {   //default: false
-    //stop at '}', EOF
+    //stop at ';', ')', '}', EOF
     if (!forceMulti) {
         checkForDefine();
         if (lexer->getCurrentType() != (TokenType) '{')
             return parseStatement();
-        else lexer->getNextToken(); //eat '{'
+        lexer->getNextToken(); //eat '{'
     }
     auto* multi = new MultiStatementNode(lexer->getCurrentLocation());
     StatementNode *stat;
     checkForDefine();
-    while (lexer->getCurrentType() != (TokenType)'}' && lexer->getCurrentType() != TokenType::t_eof)
+    while (lexer->getCurrentType() != (TokenType)';' && lexer->getCurrentType() != (TokenType)')' &&
+           lexer->getCurrentType() != (TokenType)'}' && lexer->getCurrentType() != TokenType::t_eof)
     {
         stat = parseStatement();
         checkForDefine();
@@ -258,22 +266,20 @@ DefineNode* Parser::parseDefine() {
 FunctionNode* Parser::parseFunction() {
     if (lexer->getCurrentType() != TokenType::t_identifier)
         return nullptr;
-    if (GetDefine(lexer->getCurrentIdentifier(), defines) != nullptr)
-        return logError<FunctionNode>("MultipleDefinitionException: Function " + lexer->getCurrentIdentifier() +
-                         " overwrites a define with the same name");
-    if (GetFunction(lexer->getCurrentIdentifier(), funcs) != nullptr)
-        return logError<FunctionNode>("MultipleDefinitionException: Function \"" + lexer->getCurrentIdentifier() +
-            "\" at " + lexer->getCurrentLocString() + " is already defined");
-    //save identifier token and file position in case code starts with identifier and we need to back up the lexer
+    //save identifier token in case code starts with identifier and we need to back up the lexer
     Token iden = lexer->getCurrentToken();
-    std::streampos p = lexer->getFilePos();
     checkForDefine();
     if (lexer->getNextType() != (TokenType)'{') {
         //back up lexer to previous identifier token
-        //TODO change this to use new replacement system for defines
-        lexer->setFilePos(iden, p);
+        lexer->rollback(&iden, 1);
         return nullptr;
     }
+    if (GetDefine(lexer->getCurrentIdentifier(), defines) != nullptr)
+        return logError<FunctionNode>("MultipleDefinitionException: Function \"" + lexer->getCurrentIdentifier() +
+                                      "\" overwrites a define with the same name");
+    if (GetFunction(lexer->getCurrentIdentifier(), funcs) != nullptr)
+        return logError<FunctionNode>("MultipleDefinitionException: Function \"" + lexer->getCurrentIdentifier() +
+                                      "\" at " + lexer->getCurrentLocString() + " is previously defined");
     StatementNode* body = parseMultiStatement();
     return new FunctionNode(iden.Identifier, body, iden.Loc);
 }
