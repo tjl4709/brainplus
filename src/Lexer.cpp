@@ -3,19 +3,49 @@
 //
 #include "Lexer.h"
 
-Token::Token(TokenType t, Location l) : Type(t), Loc(l), Number(0), Op(Operator::null) {}
-Token::Token(int n, Location l) : Token(TokenType::t_number, l) { Number = n; }
-Token::Token(Operator op, Location l) : Token(TokenType::t_op, l) { Op = op; }
-Token::Token(std::string id, bool isIden, Location l) : Token(isIden ? TokenType::t_identifier : TokenType::t_string, l)
-    { Identifier = std::move(id); }
-Token::Token(std::string id, Location l) : Token(std::move(id), true, l) {}
+#include <utility>
 
-void Token::copy(const Token& tok) {
-    Loc = tok.Loc;
-    Type = tok.Type;
-    Identifier = Type == TokenType::t_identifier || Type == TokenType::t_string ? tok.Identifier : "";
-    Number = Type == TokenType::t_number ? tok.Number : 0;
-    Op = Type == TokenType::t_op ? tok.Op : Operator::null;
+//Token
+Token::Token(TokenType t, Location l) { create(t, l); }
+Token::Token(int n, Location l) { create(n, l); }
+Token::Token(Operator op, Location l) { create(op, l); }
+Token::Token(std::string id, bool isIden, Location l) { create(std::move(id), isIden, l); }
+Token::Token(std::string id, Location l) { create(std::move(id), l); }
+Token::Token(Token *tok) { copy(tok); }
+
+Token *Token::create(TokenType t, Location l) {
+    Type = t;
+    Loc = l;
+    Number = 0;
+    Op = Operator::null;
+    return this;
+}
+Token *Token::create(int n, Location l) {
+    create(TokenType::t_number, l);
+    Number = n;
+    return this;
+}
+Token *Token::create(Operator op, Location l) {
+    create(TokenType::t_op, l);
+    Op = op;
+    return this;
+}
+Token *Token::create(std::string id, bool isIden, Location l) {
+    create(isIden ? TokenType::t_identifier : TokenType::t_string, l);
+    Identifier = std::move(id);
+    return this;
+}
+Token *Token::create(std::string id, Location l) {
+    create(std::move(id), true, l);
+    return this;
+}
+
+void Token::copy(Token *tok) {
+    Loc = tok->Loc;
+    Type = tok->Type;
+    Identifier = Type == TokenType::t_identifier || Type == TokenType::t_string ? tok->Identifier : "";
+    Number = Type == TokenType::t_number ? tok->Number : 0;
+    Op = Type == TokenType::t_op ? tok->Op : Operator::null;
 }
 std::string Token::toString() const {
     switch (Type) {
@@ -35,7 +65,7 @@ std::string Token::toString() const {
     }
 }
 
-
+//Lexer
 int Lexer::advance() {
     curChar = file->get();
     while (curChar == '\r')
@@ -130,11 +160,11 @@ Operator Lexer::parseOp() {
     advance();
     return op;
 }
-Token Lexer::getNextToken() {
+Token *Lexer::getNextToken() {
     if (!defRep->empty()) {
-        curTok = defRep->back();
+        curTok->copy(defRep->back());
         defRep->pop_back();
-        curTok.Loc = lexLoc;
+        curTok->Loc = lexLoc;
         return curTok;
     }
     while (isspace(curChar))
@@ -156,7 +186,7 @@ Token Lexer::getNextToken() {
         else if (str == "for") tt = TokenType::t_for;
         else if (str == "while") tt = TokenType::t_while;
         else if (str == "do") tt = TokenType::t_do;
-        else return curTok = *new Token(str, curLoc);
+        else return curTok->create(str, curLoc);
     } else if (isdigit(curChar)) {
         int n = 0;
         do {
@@ -175,7 +205,7 @@ Token Lexer::getNextToken() {
                 n = (n << 4) + t;
             }
         }
-        return curTok = *new Token(n, curLoc);
+        return curTok->create(n, curLoc);
     } else if (curChar == '\'') {
         if (advance() == '\'') {
             advance();
@@ -199,7 +229,7 @@ Token Lexer::getNextToken() {
                 case '6': curChar = '\6'; break;
                 case '7': curChar = '\7'; break;
             }
-        curTok = *new Token(curChar, curLoc);
+        curTok->create(curChar, curLoc);
         if (advance() != '\'') {
             while (advance() != '\'' && curChar != EOF);
             if (curChar == EOF)
@@ -227,7 +257,7 @@ Token Lexer::getNextToken() {
             } while (curChar != '/');
             advance(); //eat '/'
             return getNextToken();
-        } else return curTok = *new Token(Operator::division, curLoc);
+        } else return curTok->create(Operator::division, curLoc);
     } else if (curChar == '\"') {
         std::string str;
         while (advance() != '\"' && curChar != EOF)
@@ -235,12 +265,12 @@ Token Lexer::getNextToken() {
         if (curChar == EOF)
             throw std::exception(("SyntaxException: String literal never closed at "+curLoc.toString()).c_str());
         advance(); //eat ending quote
-        return curTok = *new Token(str, false, curLoc);
+        return curTok->create(str, false, curLoc);
     } else if (curChar == EOF) tt = TokenType::t_eof;
     else if ((op = parseOp()) != Operator::null) {
-        return curTok = *new Token(op, curLoc);
+        return curTok->create(op, curLoc);
     } else tt = (TokenType)curChar;
 
     advance();
-    return curTok = *new Token(tt, curLoc);
+    return curTok->create(tt, curLoc);
 }

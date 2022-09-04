@@ -30,52 +30,67 @@ public:
     Token(Operator op, Location l);
     Token(std::string id, bool isIden, Location l);
     Token(std::string id, Location l);
-    void copy(const Token& tok);
+    Token(Token *tok);
+
+    Token *create(TokenType t, Location l);
+    Token *create(int n, Location l);
+    Token *create(Operator op, Location l);
+    Token *create(std::string id, bool isIden, Location l);
+    Token *create(std::string id, Location l);
+
+    void copy(Token *tok);
     std::string toString() const;
 };
 
 class Lexer {
 private:
     Location lexLoc;
-    Token curTok;
+    Token *curTok;
     std::string fname;
-    std::vector<Token> *defRep;
+    std::vector<Token*> *defRep;
     std::ifstream *file;
     int curChar;
     int advance();
     Operator parseOp();
 public:
     explicit Lexer(const std::string& filename) : lexLoc({1,0}), curChar(' ') {
-        defRep = new std::vector<Token>();
+        defRep = new std::vector<Token*>();
         fname = filename;
         file = new std::ifstream(filename);
         getNextToken();
     }
+    ~Lexer() {
+        while (!defRep->empty()) {
+            delete defRep->back();
+            defRep->pop_back();
+        }
+        delete defRep;
+        delete curTok;
+        file->close();
+        delete file;
+    }
 
-    Token getCurrentToken() {return curTok;}
-    TokenType getCurrentType() const {return curTok.Type;}
-    std::string getCurrentIdentifier() const {return curTok.Identifier;}
-    Operator getCurrentOp() const {return curTok.Op;}
-    Location getCurrentLocation() const {return curTok.Loc;}
-    std::string getCurrentLocString() const {return curTok.Loc.toString();}
+    Token *getCurrentToken() {return curTok;}
+    TokenType getCurrentType() const {return curTok->Type;}
+    std::string getCurrentIdentifier() const {return curTok->Identifier;}
+    Operator getCurrentOp() const {return curTok->Op;}
+    Location getCurrentLocation() const {return curTok->Loc;}
+    std::string getCurrentLocString() const {return curTok->Loc.toString();}
 
-    Token getNextToken();
-    TokenType getNextType() {return getNextToken().Type;}
+    Token *getNextToken();
+    TokenType getNextType() {return getNextToken()->Type;}
 
     bool good() {return file->good();}
     std::string getFileName() {return fname;}
-    void setReplacement(std::vector<Token> *rep) {
+    void setReplacement(std::vector<Token*> *rep) {
         for (unsigned int i = rep->size();i > 1;)
             defRep->push_back(rep->at(--i));
         curTok = rep->front();
-        curTok.Loc = lexLoc;
+        curTok->Loc = lexLoc;
     }
-    void rollback(Token tkns[], unsigned int len) {
+    void rollback(Token *tok) {
         defRep->push_back(curTok);
-        curTok = *tkns;
-        tkns += len;
-        while (--len > 0)
-            defRep->push_back(*--tkns);
+        curTok = tok;
     }
 };
 

@@ -111,7 +111,7 @@ StatementNode *Parser::parsePrimary(int parenDepth) {
         case t_for:return parseFor();
         case t_while: return parseWhile();
         case t_do: return parseDo();
-        case t_number: s = new NumberNode(lexer->getCurrentToken().Number, lexer->getCurrentLocation()); break;
+        case t_number: s = new NumberNode(lexer->getCurrentToken()->Number, lexer->getCurrentLocation()); break;
         case t_identifier: {
             DefineNode *d;
             if ((d = GetDefine(lexer->getCurrentIdentifier(), defines))) {
@@ -220,9 +220,15 @@ StatementNode *Parser::parseMultiStatement(bool forceMulti) {   //default: false
         lexer->getNextToken(); //eat '}'
     else if (!forceMulti)
         return logError("SyntaxException: No matching '}' for '{' at " + multi->getLocString());
-    if (multi->getNumStatements() == 0) return nullptr;
-    if (multi->getNumStatements() == 1) return multi->getStatement(0);
-    return multi;
+    StatementNode *s;
+    if (multi->getNumStatements() == 0)
+        s = nullptr;
+    else if (multi->getNumStatements() == 1) {
+        s = multi->getStatement(0);
+        multi->removeStatement(0);
+    } else return multi;
+    delete multi;
+    return s;
 }
 
 //public functions
@@ -245,7 +251,6 @@ DefineNode* Parser::parseDefine() {
     if (lexer->getCurrentType() != TokenType::t_define) {
         if (lexer->getCurrentType() == TokenType::t_enddef)
             lexer->getNextToken();
-        defComp = true;
         return nullptr;
     }
     if (lexer->getNextType() != TokenType::t_identifier)
@@ -255,7 +260,7 @@ DefineNode* Parser::parseDefine() {
             "\" at " + lexer->getCurrentLocString() + " is already defined");
     std::string iden = lexer->getCurrentIdentifier();
     Location l = lexer->getCurrentLocation();
-    auto rep = new std::vector<Token>();
+    auto rep = new std::vector<Token*>();
     while (lexer->getNextType() != TokenType::t_define && lexer->getCurrentType() != TokenType::t_enddef)
         if (lexer->getCurrentType() == TokenType::t_identifier && lexer->getCurrentIdentifier() == iden)
             return logError<DefineNode>("RecursiveDefineException: Define \"" + iden + "\" contains a reference to itself");
@@ -267,21 +272,27 @@ FunctionNode* Parser::parseFunction() {
     if (lexer->getCurrentType() != TokenType::t_identifier)
         return nullptr;
     //save identifier token in case code starts with identifier and we need to back up the lexer
-    Token iden = lexer->getCurrentToken();
+    auto *iden = new Token(lexer->getCurrentToken());
     checkForDefine();
     if (lexer->getNextType() != (TokenType)'{') {
         //back up lexer to previous identifier token
-        lexer->rollback(&iden, 1);
+        lexer->rollback(iden);
         return nullptr;
     }
-    if (GetDefine(lexer->getCurrentIdentifier(), defines) != nullptr)
+    if (GetDefine(lexer->getCurrentIdentifier(), defines) != nullptr) {
+        delete iden;
         return logError<FunctionNode>("MultipleDefinitionException: Function \"" + lexer->getCurrentIdentifier() +
                                       "\" overwrites a define with the same name");
-    if (GetFunction(lexer->getCurrentIdentifier(), funcs) != nullptr)
+    }
+    if (GetFunction(lexer->getCurrentIdentifier(), funcs) != nullptr) {
+        delete iden;
         return logError<FunctionNode>("MultipleDefinitionException: Function \"" + lexer->getCurrentIdentifier() +
                                       "\" at " + lexer->getCurrentLocString() + " is previously defined");
+    }
     StatementNode* body = parseMultiStatement();
-    return new FunctionNode(iden.Identifier, body, iden.Loc);
+    auto *func = new FunctionNode(iden->Identifier, body, iden->Loc);
+    delete iden;
+    return func;
 }
 StatementNode* Parser::parseCode() {
     return parseMultiStatement(true);

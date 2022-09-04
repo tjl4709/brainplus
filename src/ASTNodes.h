@@ -15,6 +15,8 @@ protected:
 public:
     ASTNode(Location l, NodeType t) : Loc(l), Type(t) {}
     explicit ASTNode(Location l) : ASTNode(l, NodeType::Base) {}
+    virtual ~ASTNode() = default;
+
     int getLine() const { return Loc.Line; }
     int getCol() const { return Loc.Col; }
     std::string getLocString() { return Loc.toString(); }
@@ -29,6 +31,7 @@ protected:
     StatementNode(Location l, NodeType t) : ASTNode(l, t) {}
     explicit StatementNode(Location l) : StatementNode(l, NodeType::Statement) {}
 public:
+    ~StatementNode() override = default;
     std::string toString() override { return "Statement" + ASTNode::toString(); }
 };
 class MultiStatementNode : public StatementNode {
@@ -37,6 +40,14 @@ public:
     MultiStatementNode(std::vector<StatementNode*> *statements, Location l) : StatementNode(l, NodeType::MultiStatement),
         Statements(statements == nullptr ? new std::vector<StatementNode*> : statements) {}
     explicit MultiStatementNode(Location l) : MultiStatementNode(nullptr, l) {}
+    ~MultiStatementNode() override {
+        while (!Statements->empty()) {
+            delete Statements->back();
+            Statements->pop_back();
+        }
+        delete Statements;
+    }
+
     std::string toString() override {
         if (Statements->empty()) return "";
         std::string ret;
@@ -87,12 +98,14 @@ class NumberNode : public StatementNode {
     int Number;
 public:
     NumberNode(int n, Location l) : StatementNode(l, NodeType::Number), Number(n) {}
+    ~NumberNode() override = default;
     std::string toString() override { return "N:" + std::to_string(Number); }
 };
 class CallNode : public StatementNode {
     std::string Id;
 public:
     CallNode(std::string id, Location l) : StatementNode(l), Id(std::move(id)) { Type = NodeType::Call; }
+    ~CallNode() override = default;
     std::string getId() { return Id; }
     std::string toString() override { return Id; }
 };
@@ -102,6 +115,7 @@ protected:
     Operator Op;
 public:
     NullaryOperatorNode(Operator op, Location l) : StatementNode(l, NodeType::NullaryOperator), Op(op) {}
+    ~NullaryOperatorNode() override = default;
     std::string toString() override { return EnumOps::OpToStr(Op); }
 };
 class UnaryOperatorNode : public NullaryOperatorNode {
@@ -110,6 +124,7 @@ protected:
 public:                 //if RHS = null, implied default number
     UnaryOperatorNode(Operator op, StatementNode *rhs, Location l) : NullaryOperatorNode(op, l),
         RHS(rhs) { Type = NodeType::UnaryOperator; }
+    ~UnaryOperatorNode() override { delete RHS; }
     std::string toString() override { return EnumOps::OpToStr(Op) + ' ' + RHS->toString(); }
 };
 class BinaryOperatorNode : public UnaryOperatorNode {
@@ -117,6 +132,7 @@ class BinaryOperatorNode : public UnaryOperatorNode {
 public:                 //RHS = number or ptr lookup if comp op, else bool expr
     BinaryOperatorNode(Operator op, StatementNode *lhs, StatementNode *rhs, Location l) :
         UnaryOperatorNode(op, rhs, l), LHS(lhs) { Type = NodeType::BinaryOperator; }
+    ~BinaryOperatorNode() override { delete LHS; }
     std::string toString() override { return LHS->toString() + ' ' + UnaryOperatorNode::toString(); }
 };
 //Control statement nodes
@@ -128,6 +144,7 @@ public:
         StatementNode(l), Expression(expr), Body(body) { Type = isWhile ? NodeType::While : NodeType::Do; }
     DoWhileNode(StatementNode *expr, StatementNode *body, Location l) :
         DoWhileNode(expr, body, false, l) {}
+    ~DoWhileNode() override { delete Expression; delete Body; }
     std::string toString() override {
         if (Type == NodeType::While)
             return "while (" + Expression->toString() + ") {\n" + Body->toString() + "\n}";
@@ -141,6 +158,7 @@ public:
         DoWhileNode(expr, body, l), Else(elseBody) { Type = isTernary ? NodeType::Ternary : NodeType::If; }
     IfTernaryNode(StatementNode *expr, StatementNode *body, StatementNode *elseBody, Location l) :
             IfTernaryNode(expr, body, elseBody, false, l) {}
+    ~IfTernaryNode() override { delete Else; }
     std::string toString() override {
         if (Type == NodeType::Ternary) return Expression->toString() + " ? " + Body->toString() + " : " + Else->toString();
         std::string ret = "if (" + Expression->toString() + ") {\n" + Body->toString() + "\n}";
@@ -158,6 +176,7 @@ class ForNode : public DoWhileNode {
 public:
     ForNode(StatementNode *start, StatementNode *expr, StatementNode *step, StatementNode *body, Location l) :
         DoWhileNode(expr, body, l), Start(start), Step(step) { Type = NodeType::For; }
+    ~ForNode() override { delete Start; delete Step; }
     std::string toString() override {
         return "for (" + Start->toString() + "; " + Expression->toString() + "; "
             + Step->toString() + ") {\n" + Body->toString() + "\n}";
@@ -170,6 +189,7 @@ protected:
     std::string Id;
 public:
     IncludeNode(std::string id, Location l) : ASTNode(l, NodeType::Include), Id(std::move(id)) {}
+    ~IncludeNode() override = default;
     std::string getFname() { return Id.substr(Id.rfind('\\')+1); }
     std::string getDir() { unsigned int i; return (i = Id.rfind('\\')) == -1 ? "." : Id.substr(0, i+1); }
     std::string getId() { return Id; }
@@ -177,21 +197,29 @@ public:
 };
 class DefineNode : public IncludeNode {
 protected:
-    std::vector<Token> *Replacement;
+    std::vector<Token*> *Replacement;
 public:
-    DefineNode(std::string id, std::vector<Token> *replacement, Location l) : IncludeNode(std::move(id), l),
+    DefineNode(std::string id, std::vector<Token*> *replacement, Location l) : IncludeNode(std::move(id), l),
         Replacement(replacement) { Type = NodeType::Define; }
-    std::vector<Token> *getReplacements() { return Replacement; }
+    ~DefineNode() override {
+        while (!Replacement->empty()) {
+            delete Replacement->back();
+            Replacement->pop_back();
+        }
+        delete Replacement;
+    }
+
+    std::vector<Token*> *getReplacements() { return Replacement; }
     unsigned int getNumReplacements() { return Replacement->size(); }
-    Token getReplacement(int i) { return Replacement->at(i); }
-    void setReplacement(std::vector<Token> *rep, int i) {
+    Token *getReplacement(int i) { return Replacement->at(i); }
+    void setReplacement(std::vector<Token*> *rep, int i) {
         Replacement->erase(Replacement->begin() + i);
         Replacement->insert(Replacement->begin() + i, rep->begin(), rep->end());
     }
     std::string toString() override {
         std::string str;
         for (const auto& tok : *Replacement)
-            str += " " + tok.toString();
+            str += " " + tok->toString();
         return "define " + Id + ":" + str;
     }
 };
@@ -201,6 +229,7 @@ protected:
 public:
     FunctionNode(std::string id, StatementNode *statement, Location l) :
         IncludeNode(std::move(id), l), Statement(statement) { Type = NodeType::Function; }
+    ~FunctionNode() override { delete Statement; }
     std::string toString() override { return Id + " {\n" + Statement->toString() + "\n}"; }
 };
 
