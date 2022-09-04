@@ -2,6 +2,7 @@
 define size  2
 define start 3
 define cntr  4
+define accu @start@+@size@+1
 enddef
 
 //size = size of array
@@ -11,14 +12,14 @@ enddef
 //returns sum in position after array
 sum {
   @=0 =@size+
-  @=@start@+@size@+1 =0
+  @=accu =0
   for (@=0 =0; <@size; +) {
     @=1 =@start+@0
-    @=@start@+@size@+1
+    @=accu
     +@@1
     @=0
   }
-  @=@start@+@size@+1
+  @=accu
 }
 
 @=size =8
