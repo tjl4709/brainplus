@@ -41,14 +41,37 @@ IfTernaryNode *Parser::parseIf() {
     if (lexer->getCurrentType() != (TokenType)'(')
         return logError<IfTernaryNode>("SyntaxException: Expected '(' after \"if\" at " + lexer->getCurrentLocString());
     StatementNode *expr = parseStatement(), *body, *elseBody = nullptr;
-    if (!expr || !(body = parseMultiStatement()))
-        return nullptr;
+    if (!expr) return nullptr;
+    body = parseMultiStatement();
     if (lexer->getCurrentType() == TokenType::t_else) {
         lexer->getNextToken(); //eat "else"
-        if (!(elseBody = parseMultiStatement()))
-            return nullptr;
+        elseBody = parseMultiStatement();
     }
     return new IfTernaryNode(expr, body, elseBody, false, l);
+}
+IfTernaryNode *Parser::parseTernary(StatementNode *expr) {
+    //preconditions: boolean expression has already been parsed, current token is '?'
+    lexer->getNextToken(); //eat '?'
+    StatementNode *body = parseStatement(), *elseBody;
+    if (!body) return nullptr;
+    if (!NodeOps::HasNumberReturn(body)) return logError<IfTernaryNode>("IncorrectOperandException: Operand at " +
+        body->getLocString() + " must return a number (i.e. be a number, pointer lookup, or ternary)");
+    checkForDefine();
+    if (lexer->getCurrentType() != (TokenType)':') {
+        delete body;
+        return logError<IfTernaryNode>("SyntaxException: Expected ':' to separate ternary assignments at " + expr->getLocString());
+    }
+    lexer->getNextToken(); //eat ':'
+    if (!(elseBody = parseStatement())) {
+        delete body;
+        return nullptr;
+    }
+    if (!NodeOps::HasNumberReturn(elseBody)) {
+        delete body;
+        return logError<IfTernaryNode>("IncorrectOperandException: Operand at " + elseBody->getLocString() +
+                                       " must return a number (i.e. be a number, pointer lookup, or ternary)");
+    }
+    return new IfTernaryNode(expr, body, elseBody, true, expr->getLoc());
 }
 ForNode *Parser::parseFor() {
     //precondition: current token is "for"
@@ -59,20 +82,28 @@ ForNode *Parser::parseFor() {
         return logError<ForNode>("SyntaxException: Expected '(' after \"for\" at " + lexer->getCurrentLocString());
     lexer->getNextToken(); //eat '('
     StatementNode *start = parseMultiStatement(true), *expr, *step, *body;
-    if (!start) return nullptr;
-    if (lexer->getCurrentType() != (TokenType)';')
+    if (lexer->getCurrentType() != (TokenType)';') {
+        delete start;
         return logError<ForNode>("SyntaxException: Expected ';' after for initializer at " + lexer->getCurrentLocString());
+    }
     lexer->getNextToken(); //eat ';'
-    if (!(expr = parseStatement())) return nullptr;
+    if (!(expr = parseStatement())) {
+        delete start;
+        return nullptr;
+    }
     checkForDefine();
-    if (lexer->getCurrentType() != (TokenType)';')
+    if (lexer->getCurrentType() != (TokenType)';') {
+        delete start; delete expr;
         return logError<ForNode>("SyntaxException: Expected ';' after for condition at " + lexer->getCurrentLocString());
+    }
     lexer->getNextToken(); //eat ';'
-    if (!(step = parseMultiStatement(true))) return nullptr;
-    if (lexer->getCurrentType() != (TokenType)')')
+    step = parseMultiStatement(true);
+    if (lexer->getCurrentType() != (TokenType)')') {
+        delete start; delete expr; delete step;
         return logError<ForNode>("SyntaxException: Expected ')' after for step at " + lexer->getCurrentLocString());
+    }
     lexer->getNextToken(); //eat ')'
-    if (!(body = parseMultiStatement())) return nullptr;
+    body = parseMultiStatement();
     return new ForNode(start, expr, step, body, l);
 }
 DoWhileNode *Parser::parseWhile() {
@@ -83,7 +114,8 @@ DoWhileNode *Parser::parseWhile() {
     if (lexer->getCurrentType() != (TokenType)'(')
         return logError<DoWhileNode>("SyntaxException: Expected '(' after \"while\" at " + lexer->getCurrentLocString());
     StatementNode *expr = parseStatement(), *body;
-    if (!expr || !(body = parseMultiStatement())) return nullptr;
+    if (!expr) return nullptr;
+    body = parseMultiStatement();
     return new DoWhileNode(expr, body, true, l);
 }
 DoWhileNode *Parser::parseDo() {
@@ -91,17 +123,56 @@ DoWhileNode *Parser::parseDo() {
     Location l = lexer->getCurrentLocation();
     lexer->getNextToken(); //eat "do"
     StatementNode *expr, *body = parseMultiStatement();
-    if (!body) return nullptr;
-    if (lexer->getCurrentType() != TokenType::t_while)
+    if (lexer->getCurrentType() != TokenType::t_while) {
+        delete body;
         return logError<DoWhileNode>("SyntaxException: Expected \"while\" after do loop at " + lexer->getCurrentLocString());
+    }
     lexer->getNextToken();
     checkForDefine();
-    if (lexer->getCurrentType() != (TokenType)'(')
+    if (lexer->getCurrentType() != (TokenType)'(') {
+        delete body;
         return logError<DoWhileNode>("SyntaxException: Expected '(' after \"while\" at " + lexer->getCurrentLocString());
-    if (!(expr = parseStatement())) return nullptr;
+    }
+    if (!(expr = parseStatement())) {
+        delete body;
+        return nullptr;
+    }
     return new DoWhileNode(expr, body, false, l);
 }
 
+StatementNode *Parser::parseOp(int parenDepth) {
+    Operator op = lexer->getCurrentOp();
+    Location l = lexer->getCurrentLocation();
+    StatementNode *p;
+    lexer->getNextToken();
+    checkForDefine();
+    if (op == Operator::print || op == Operator::read) {
+        return new NullaryOperatorNode(op, l);
+    } else if (lexer->getCurrentType() == (TokenType)'(') {
+        lexer->getNextToken();
+        if (!(p = parseStatement(parenDepth+1))) return nullptr;
+        if (!NodeOps::HasNumberReturn(p)) return logError("IncorrectOperandException: Operand at " +
+            p->getLocString() + " must return a number (i.e. be a number, pointer lookup, or ternary)");
+        if (EnumOps::OpIsValComp(op))
+            return new BinaryOperatorNode(op, NodeOps::CurrentValLookup(l), p, l);
+        return new UnaryOperatorNode(op, p, l);
+    } else if (EnumOps::OpIsValComp(op)) {
+        if (lexer->getCurrentType() != TokenType::t_number && (lexer->getCurrentType() != TokenType::t_op ||
+                                                               !EnumOps::OpIsPtrLookup(lexer->getCurrentOp())))
+            return logError("IncorrectOperandException: Comparative operator at " + l.toString() +
+                " missing right hand-side operand");
+        if (!(p = parsePrimary(parenDepth))) return nullptr;
+        return new BinaryOperatorNode(op, NodeOps::CurrentValLookup(l), p, l);
+    } else if (lexer->getCurrentType() == TokenType::t_number || op == Operator::bool_not ||
+               lexer->getCurrentType() == TokenType::t_op && EnumOps::OpIsPtrLookup(lexer->getCurrentOp())) {
+        if (!(p = parsePrimary(parenDepth))) return nullptr;
+        return new UnaryOperatorNode(op, p, l);
+    } else if (EnumOps::OpIsPtrLookup(op)) {
+        return NodeOps::CurrentValLookup(l);
+    } else if (op == Operator::assignment || op == Operator::ptr_assignment || op == Operator::ptr_store) {
+        return new UnaryOperatorNode(op, new NumberNode(0, l), l);
+    } else return new UnaryOperatorNode(op, new NumberNode(1, l), l);
+}
 StatementNode *Parser::parsePrimary(int parenDepth) {
     StatementNode *s;
     switch (lexer->getCurrentType()) {
@@ -117,39 +188,13 @@ StatementNode *Parser::parsePrimary(int parenDepth) {
             if ((d = GetDefine(lexer->getCurrentIdentifier(), defines))) {
                 lexer->setReplacement(d->getReplacements());
                 return parsePrimary(parenDepth);
-            } else if (GetFunction(lexer->getCurrentIdentifier(), funcs))
+            } else if (!funcComp || GetFunction(lexer->getCurrentIdentifier(), funcs))
                 s = new CallNode(lexer->getCurrentIdentifier(), lexer->getCurrentLocation());
             else return logError("SyntaxException: Unknown identifier - \"" + lexer->getCurrentIdentifier() +
                 "\" at " + lexer->getCurrentLocString());
             break;
         }
-        case t_op: {
-            Operator op = lexer->getCurrentOp();
-            Location l = lexer->getCurrentLocation();
-            lexer->getNextToken();
-            checkForDefine();
-            if (op == Operator::print || op == Operator::read) {
-                s = new NullaryOperatorNode(op, l);
-            } else if (EnumOps::OpIsValComp(op)) {
-                if (lexer->getCurrentType() != TokenType::t_number && (lexer->getCurrentType() != TokenType::t_op ||
-                    !EnumOps::OpIsPtrLookup(lexer->getCurrentOp())))
-                    return logError("SyntaxException: Comparative operator at " + l.toString() + " missing right "
-                         "hand-side operand");
-                auto p = parsePrimary(parenDepth);
-                if (!p) return nullptr;
-                return new BinaryOperatorNode(op, NodeOps::CurrentValLookup(l), p, l);
-            } else if (lexer->getCurrentType() == TokenType::t_number || op == Operator::bool_not ||
-                lexer->getCurrentType() == TokenType::t_op && EnumOps::OpIsPtrLookup(lexer->getCurrentOp())) {
-                auto p = parsePrimary(parenDepth);
-                if (!p) return nullptr;
-                return new UnaryOperatorNode(op, p, l);
-            } else if (EnumOps::OpIsPtrLookup(op)) {
-                return NodeOps::CurrentValLookup(l);
-            } else if (op == Operator::assignment || op == Operator::ptr_assignment || op == Operator::ptr_store) {
-                return new UnaryOperatorNode(op, new NumberNode(0, l), l);
-            } else return new UnaryOperatorNode(op, new NumberNode(1, l), l);
-            break;
-        }
+        case t_op: return parseOp(parenDepth);
         default: return logError("SyntaxException: Unexpected token - " + EnumOps::TypeToString(lexer->getCurrentType()) +
             " at " + lexer->getCurrentLocString());
     }
@@ -159,14 +204,18 @@ StatementNode *Parser::parsePrimary(int parenDepth) {
 StatementNode *Parser::parseMultary(int opPrec, StatementNode *lhs) {
     int curPrec;
     Operator curOp;
-    Location l{};
     StatementNode *rhs;
     checkForDefine();
-    while (lexer->getCurrentType() == TokenType::t_op && EnumOps::OpIsMultary(lexer->getCurrentOp())) {
+    while (lexer->getCurrentType() == TokenType::t_op && EnumOps::OpIsMultary(lexer->getCurrentOp())
+           || lexer->getCurrentType() == (TokenType)'?') {
+        if (lexer->getCurrentType() == (TokenType)'?') {
+            if (!(lhs = parseTernary(lhs)))
+                return nullptr;
+            continue;
+        }
         curPrec = EnumOps::OpPrecedence(curOp = lexer->getCurrentOp());
         if (curPrec < opPrec)
             return lhs;
-        l = lexer->getCurrentLocation();
         lexer->getNextToken(); //eat operator
         if (!(rhs = parsePrimary(0)))
             return nullptr;
@@ -174,13 +223,13 @@ StatementNode *Parser::parseMultary(int opPrec, StatementNode *lhs) {
         if (lexer->getCurrentType() == TokenType::t_op && curPrec < EnumOps::OpPrecedence(lexer->getCurrentOp())
             && !(rhs = parseMultary(curPrec + 1, rhs)))
             return nullptr;
-        lhs = new BinaryOperatorNode(curOp, lhs, rhs, l);
+        lhs = new BinaryOperatorNode(curOp, lhs, rhs, lhs->getLoc());
     }
     return lhs;
 }
 StatementNode *Parser::parseStatement(int parenDepth) {
     // stop at ')', ';'
-    auto p = parsePrimary(parenDepth);
+    StatementNode *p = parsePrimary(parenDepth), *m;
     if (!p) return nullptr;
     checkForDefine();
     if (lexer->getCurrentType() == (TokenType)')') {
@@ -188,14 +237,17 @@ StatementNode *Parser::parseStatement(int parenDepth) {
             lexer->getNextToken();
             parenDepth--;
         }
-        return p;
+        if (parenDepth == 0) return p;
     }
-    p = parseMultary(0, p);
+    if (!(m = parseMultary(0, p))) {
+        delete p;
+        return nullptr;
+    }
     if (lexer->getCurrentType() == (TokenType)')' && parenDepth > 0) {
         lexer->getNextToken(); //eat ')'
         parenDepth--;
     }
-    return p;
+    return m;
 }
 StatementNode *Parser::parseMultiStatement(bool forceMulti) {   //default: false
     //stop at ';', ')', '}', EOF
@@ -265,27 +317,32 @@ DefineNode* Parser::parseDefine() {
         if (lexer->getCurrentType() == TokenType::t_identifier && lexer->getCurrentIdentifier() == iden)
             return logError<DefineNode>("RecursiveDefineException: Define \"" + iden + "\" contains a reference to itself");
         else
-            rep->push_back(lexer->getCurrentToken());
+            rep->push_back(new Token(lexer->getCurrentToken()));
     return new DefineNode(iden, rep, l);
 }
 FunctionNode* Parser::parseFunction() {
-    if (lexer->getCurrentType() != TokenType::t_identifier)
+    if (lexer->getCurrentType() != TokenType::t_identifier) {
+        funcComp = true;
         return nullptr;
+    }
     //save identifier token in case code starts with identifier and we need to back up the lexer
     auto *iden = new Token(lexer->getCurrentToken());
     checkForDefine();
     if (lexer->getNextType() != (TokenType)'{') {
         //back up lexer to previous identifier token
         lexer->rollback(iden);
+        funcComp = true;
         return nullptr;
     }
     if (GetDefine(lexer->getCurrentIdentifier(), defines) != nullptr) {
         delete iden;
+        funcComp = true;
         return logError<FunctionNode>("MultipleDefinitionException: Function \"" + lexer->getCurrentIdentifier() +
                                       "\" overwrites a define with the same name");
     }
     if (GetFunction(lexer->getCurrentIdentifier(), funcs) != nullptr) {
         delete iden;
+        funcComp = true;
         return logError<FunctionNode>("MultipleDefinitionException: Function \"" + lexer->getCurrentIdentifier() +
                                       "\" at " + lexer->getCurrentLocString() + " is previously defined");
     }

@@ -15,6 +15,7 @@ std::string mainFile;
 std::map<IncludeNode*,Parser*> *includes;
 std::vector<DefineNode*> defines;
 std::vector<FunctionNode*> functions;
+StatementNode *code;
 
 bool cp_ends_with(char* str, std::string suffix) {
     unsigned int str_len = strlen(str), suf_len = suffix.size();
@@ -40,6 +41,15 @@ std::string join(std::vector<std::string> elems, const std::string& delim) {
     return std::move(str);
 }
 int exit_msg(const std::string& msg, int code) {
+    for (auto func : functions)
+        delete func;
+    for (auto def : defines)
+        delete def;
+    for (auto inc : *includes) {
+        delete inc.first;
+        delete inc.second;
+    }
+    delete includes;
     std::cerr << msg + '\n';
     exit(code);
 }
@@ -80,12 +90,13 @@ void parseDefines() {
     /*TEST 2.1: Recursive Defines*
     std::cout << "Defines::\n";
     for (auto def : defines)
-        std::cout << def->toString() + '\n';
+        std::cout << def->to_string() + '\n';
     /*END TEST 2.1*/
 
     // loop thru define statements:
     //   if contains reference to itself, throw error, otherwise replace any occurrence (call node) in other define statements
     auto defNames = new std::vector<std::string>();
+    DefineNode *d;
     for (auto def : defines) {
         defNames->clear();
         defNames->push_back(def->getId());
@@ -94,20 +105,39 @@ void parseDefines() {
                 if (def->getReplacement(i)->Identifier == def->getId())
                     exit_msg("RecursiveDefineException: Some or all of the following defines create a cycle - " +
                              join(*defNames, ", "), 4);
-                for (auto d : defines)
-                    if (def->getReplacement(i)->Identifier == d->getId()) {
-                        defNames->push_back(d->getId());
-                        def->setReplacement(d->getReplacements(), i--);
-                        break;
-                    }
+                if ((d = GetDefine(def->getReplacement(i)->Identifier, &defines))) {
+                    defNames->push_back(d->getId());
+                    def->setReplacement(d->getReplacements(), i--);
+                    break;
+                }
             }
     }
     delete defNames;
     /*TEST 2.2: Cyclic Defines*
     std::cout << "\nDefines::\n";
     for (auto def : defines)
-        std::cout << def->toString() + '\n';
+        std::cout << def->to_string() + '\n';
     /*END TEST 2.2*/
+}
+void checkForIdentifier(std::string id, Location l) {
+    if (!GetDefine(id, &defines) && !GetFunction(id, &functions))
+        exit_msg("UnknownIdentifierException: Unknown identifier \"" + id + "\" at " + l.toString(), 5);
+}
+void checkForUnknownIds() {
+    // loop thru defines and functions:
+    //   check for any remaining call nodes that are unidentified
+    for (auto def : defines)
+        for (int i = 0; i < def->getNumReplacements(); i++)
+            if (def->getReplacement(i)->Type == TokenType::t_identifier)
+                checkForIdentifier(def->getReplacement(i)->Identifier, def->getReplacement(i)->Loc);
+    for (auto func : functions)
+        if (func->getBody()->getType() == NodeType::MultiStatement) {
+            auto *m = (MultiStatementNode*)func->getBody();
+            for (int i = 0; i < m->getNumStatements(); i++)
+                if (m->getStatement(i)->getType() == NodeType::Call)
+                    checkForIdentifier(((CallNode *) m->getStatement(i))->getId(), m->getStatement(i)->getLoc());
+        } else if (func->getBody()->getType() == NodeType::Call)
+            checkForIdentifier(((CallNode *) func->getBody())->getId(), func->getBody()->getLoc());
 }
 
 int main(int argc, char *argv[]) {
@@ -145,13 +175,20 @@ int main(int argc, char *argv[]) {
     /*TEST 3: Function Definitions*
     std::cout << "Function::\n";
     for (auto func : functions)
-        std::cout << func->toString() + '\n';
+        std::cout << func->to_string() + '\n';
     /*END TEST 3*/
 
-    // loop thru defines and functions:
-    //   check for any remaining call nodes that are unidentified
+    checkForUnknownIds();
+
     // parse code statements in mainFile
     // codegen functions
+    for (auto inc : *includes)
+        if (inc.first->getId() == mainFile)
+            code = inc.second->parseCode();
+    /*TEST 4: Code*/
+    std::cout << "Code:\n" + code->to_string();
+    /*END TEST 4*/
+
     // codegen mainFile code statements
     // delete AST
     return 0;

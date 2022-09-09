@@ -1,4 +1,28 @@
-=12<@2?'T':'F'               //should be false since @2=0
+=(12<@2?'T':'F')             //*should be false since @2=0
+=(12<(@2?'T':'F'))           //should be true since 12 < 'T' and 'F'
 =(((12)<(@(2)))?('T'):('F')) //same as line 1 but with many parens
-=1||0&&0                     //should evaluate && first resulting in 1
-=(1||0)&&0                   //should evaluate || first resulting in 0
+
+=(1||0&&0)                   //*should evaluate && first resulting in 1
+=((1||0)&&0)                 //should evaluate || first resulting in 0
+=(0&&(1||0))                 //same as previous line
+
+if (0)
+  =0
+else if (1)
+  =1
+else
+  =2
+if (1) {
+  =1
+} else {
+  =0
+}
+if (1) {
+  if (!0)
+    =1
+  .
+} else =0
+
+while (1) {}
+do {} while (0)
+for (=0;<1;+) {}

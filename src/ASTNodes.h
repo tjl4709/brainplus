@@ -6,6 +6,7 @@
 
 #include <utility>
 #include <vector>
+#include "Lexer.h"
 
 //Base Abstract Syntax Tree Node class
 class ASTNode {
@@ -19,10 +20,11 @@ public:
 
     int getLine() const { return Loc.Line; }
     int getCol() const { return Loc.Col; }
+    Location getLoc() const { return Loc; }
     std::string getLocString() { return Loc.toString(); }
     void setLocation(Location l) { Loc = l; }
     NodeType getType() { return Type; }
-    virtual std::string toString() { return " at " + Loc.toString(); }
+    virtual std::string to_string() { return " at " + Loc.toString(); }
 };
 
 //Statement nodes
@@ -32,7 +34,7 @@ protected:
     explicit StatementNode(Location l) : StatementNode(l, NodeType::Statement) {}
 public:
     ~StatementNode() override = default;
-    std::string toString() override { return "Statement" + ASTNode::toString(); }
+    std::string to_string() override;
 };
 class MultiStatementNode : public StatementNode {
     std::vector<StatementNode*> *Statements;
@@ -48,13 +50,7 @@ public:
         delete Statements;
     }
 
-    std::string toString() override {
-        if (Statements->empty()) return "";
-        std::string ret;
-        for (StatementNode *st : *Statements)
-            ret += '\n' + st->toString();
-        return ret.substr(1);
-    }
+    std::string to_string() override;
 
     void addStatement(StatementNode *statement) {
         if (statement->getType() == NodeType::MultiStatement)
@@ -99,7 +95,7 @@ class NumberNode : public StatementNode {
 public:
     NumberNode(int n, Location l) : StatementNode(l, NodeType::Number), Number(n) {}
     ~NumberNode() override = default;
-    std::string toString() override { return "N:" + std::to_string(Number); }
+    std::string to_string() override;
 };
 class CallNode : public StatementNode {
     std::string Id;
@@ -107,7 +103,7 @@ public:
     CallNode(std::string id, Location l) : StatementNode(l), Id(std::move(id)) { Type = NodeType::Call; }
     ~CallNode() override = default;
     std::string getId() { return Id; }
-    std::string toString() override { return Id; }
+    std::string to_string() override;
 };
 //Operator nodes
 class NullaryOperatorNode : public StatementNode {
@@ -116,7 +112,8 @@ protected:
 public:
     NullaryOperatorNode(Operator op, Location l) : StatementNode(l, NodeType::NullaryOperator), Op(op) {}
     ~NullaryOperatorNode() override = default;
-    std::string toString() override { return EnumOps::OpToStr(Op); }
+    Operator getOp() { return Op; }
+    std::string to_string() override;
 };
 class UnaryOperatorNode : public NullaryOperatorNode {
 protected:
@@ -125,7 +122,7 @@ public:                 //if RHS = null, implied default number
     UnaryOperatorNode(Operator op, StatementNode *rhs, Location l) : NullaryOperatorNode(op, l),
         RHS(rhs) { Type = NodeType::UnaryOperator; }
     ~UnaryOperatorNode() override { delete RHS; }
-    std::string toString() override { return EnumOps::OpToStr(Op) + ' ' + RHS->toString(); }
+    std::string to_string() override;
 };
 class BinaryOperatorNode : public UnaryOperatorNode {
     StatementNode *LHS; //Left-Hand Side = null if ptr op
@@ -133,7 +130,7 @@ public:                 //RHS = number or ptr lookup if comp op, else bool expr
     BinaryOperatorNode(Operator op, StatementNode *lhs, StatementNode *rhs, Location l) :
         UnaryOperatorNode(op, rhs, l), LHS(lhs) { Type = NodeType::BinaryOperator; }
     ~BinaryOperatorNode() override { delete LHS; }
-    std::string toString() override { return LHS->toString() + ' ' + UnaryOperatorNode::toString(); }
+    std::string to_string() override;
 };
 //Control statement nodes
 class DoWhileNode : public StatementNode {
@@ -145,11 +142,7 @@ public:
     DoWhileNode(StatementNode *expr, StatementNode *body, Location l) :
         DoWhileNode(expr, body, false, l) {}
     ~DoWhileNode() override { delete Expression; delete Body; }
-    std::string toString() override {
-        if (Type == NodeType::While)
-            return "while (" + Expression->toString() + ") {\n" + Body->toString() + "\n}";
-        return "do {\n" + Body->toString() + "\n} while (" + Expression->toString() + ')';
-    }
+    std::string to_string() override;
 };
 class IfTernaryNode : public DoWhileNode {
     StatementNode *Else;    //null if no else. Body and Else are number, ptr lookup, or ternary if this is a ternary
@@ -159,17 +152,7 @@ public:
     IfTernaryNode(StatementNode *expr, StatementNode *body, StatementNode *elseBody, Location l) :
             IfTernaryNode(expr, body, elseBody, false, l) {}
     ~IfTernaryNode() override { delete Else; }
-    std::string toString() override {
-        if (Type == NodeType::Ternary) return Expression->toString() + " ? " + Body->toString() + " : " + Else->toString();
-        std::string ret = "if (" + Expression->toString() + ") {\n" + Body->toString() + "\n}";
-        if (Else != nullptr) {
-            ret += " else ";
-            if (Else->getType() != NodeType::If)
-                ret += "{\n" + Else->toString() + "\n}";
-            else ret += Else->toString();
-        }
-        return ret;
-    }
+    std::string to_string() override;
 };
 class ForNode : public DoWhileNode {
     StatementNode *Start, *Step;
@@ -177,10 +160,7 @@ public:
     ForNode(StatementNode *start, StatementNode *expr, StatementNode *step, StatementNode *body, Location l) :
         DoWhileNode(expr, body, l), Start(start), Step(step) { Type = NodeType::For; }
     ~ForNode() override { delete Start; delete Step; }
-    std::string toString() override {
-        return "for (" + Start->toString() + "; " + Expression->toString() + "; "
-            + Step->toString() + ") {\n" + Body->toString() + "\n}";
-    }
+    std::string to_string() override;
 };
 
 //Include, define, and function definition nodes
@@ -193,7 +173,7 @@ public:
     std::string getFname() { return Id.substr(Id.rfind('\\')+1); }
     std::string getDir() { unsigned int i; return (i = Id.rfind('\\')) == -1 ? "." : Id.substr(0, i+1); }
     std::string getId() { return Id; }
-    std::string toString() override { return "include \"" + Id + '"'; }
+    std::string to_string() override;
 };
 class DefineNode : public IncludeNode {
 protected:
@@ -216,12 +196,7 @@ public:
         Replacement->erase(Replacement->begin() + i);
         Replacement->insert(Replacement->begin() + i, rep->begin(), rep->end());
     }
-    std::string toString() override {
-        std::string str;
-        for (const auto& tok : *Replacement)
-            str += " " + tok->toString();
-        return "define " + Id + ":" + str;
-    }
+    std::string to_string() override;
 };
 class FunctionNode : public IncludeNode {
 protected:
@@ -230,13 +205,25 @@ public:
     FunctionNode(std::string id, StatementNode *statement, Location l) :
         IncludeNode(std::move(id), l), Statement(statement) { Type = NodeType::Function; }
     ~FunctionNode() override { delete Statement; }
-    std::string toString() override { return Id + " {\n" + Statement->toString() + "\n}"; }
+    StatementNode *getBody() { return Statement; }
+    std::string to_string() override;
 };
 
 class NodeOps {
 public:
     static UnaryOperatorNode *CurrentValLookup(Location l) {
         return new UnaryOperatorNode(Operator::ptr_lookupRelUp, new NumberNode(0, l), l);
+    }
+    static bool HasNumberReturn(StatementNode *s) {
+        return s->getType() == NodeType::Number || s->getType() == NodeType::Ternary || s->getType() == NodeType::BinaryOperator ||
+            s->getType() == NodeType::UnaryOperator && EnumOps::OpIsPtrLookup(((UnaryOperatorNode*)s)->getOp());
+    }
+    static std::string Parenthesize(StatementNode *s) {
+        if (!s) return "";
+        if (s->getType() == NodeType::Number || s->getType() == NodeType::UnaryOperator &&
+            EnumOps::OpIsPtrLookup(((UnaryOperatorNode*)s)->getOp()))
+            return s->to_string();
+        return '(' + s->to_string() + ')';
     }
 };
 

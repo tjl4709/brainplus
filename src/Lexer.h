@@ -53,7 +53,7 @@ private:
     int advance();
     Operator parseOp();
 public:
-    explicit Lexer(const std::string& filename) : lexLoc({1,0}), curChar(' ') {
+    explicit Lexer(const std::string& filename) : lexLoc({1,0}), curChar(' '), curTok(new Token()) {
         defRep = new std::vector<Token*>();
         fname = filename;
         file = new std::ifstream(filename);
@@ -85,7 +85,7 @@ public:
     void setReplacement(std::vector<Token*> *rep) {
         for (unsigned int i = rep->size();i > 1;)
             defRep->push_back(rep->at(--i));
-        curTok = rep->front();
+        curTok->copy(rep->front());
         curTok->Loc = lexLoc;
     }
     void rollback(Token *tok) {

@@ -3,4 +3,4 @@ project(brainplus)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(brainplus enums.h Lexer.h Lexer.cpp ASTNodes.h Parser.cpp Parser.h main.cpp)
+add_executable(brainplus enums.h Lexer.h Lexer.cpp ASTNodes.h ASTNodes.cpp Parser.h Parser.cpp main.cpp)

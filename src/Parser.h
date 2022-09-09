@@ -17,21 +17,26 @@ class Parser {
     Lexer *lexer;
     std::vector<DefineNode*>* defines;
     std::vector<FunctionNode*>* funcs;
+    bool funcComp;
     // error logging helper function
     template <typename T = StatementNode>
     static T *logError(const std::string& msg);
     //parsing helper functions
     void checkForDefine();
     IfTernaryNode *parseIf();
+    IfTernaryNode *parseTernary(StatementNode *expr);
     ForNode *parseFor();
     DoWhileNode *parseWhile();
     DoWhileNode *parseDo();
+
+    StatementNode *parseOp(int parenDepth);
     StatementNode *parsePrimary(int parenDepth);
     StatementNode *parseMultary(int opPrec, StatementNode *lhs);
     StatementNode *parseStatement(int parenDepth = 0);
     StatementNode *parseMultiStatement(bool forceMulti = false);
 public:
-    explicit Parser(Lexer *l, std::vector<DefineNode*>* d, std::vector<FunctionNode*>* f) : lexer(l), defines(d), funcs(f) {
+    explicit Parser(Lexer *l, std::vector<DefineNode*>* d, std::vector<FunctionNode*>* f) :
+        lexer(l), defines(d), funcs(f), funcComp(false) {
         if (!lexer->good()) throw std::exception(("IOException: " + lexer->getFileName() + " not good").c_str());
     }
     ~Parser() { delete lexer; }
